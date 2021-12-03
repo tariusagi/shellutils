@@ -97,7 +97,7 @@ fi
 
 # NOTE:This script requires pishrink.sh from https://github.com/Drewsif/PiShrink. Download and put it in PATH before 
 # using this script.
-DEP="ftp pv pigz pishrink.sh"
+DEP="pv pigz pishrink.sh"
 
 # Check dependencies first.
 echo Checking for dependencies...
