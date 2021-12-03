@@ -64,11 +64,15 @@ echo "Hello $name, how are you today?"
 echo My base name is \"$SCRIPT_NAME\"
 echo My directory is \"$SCRIPT_DIR\"
 echo My full path name is \"$SCRIPT\"
-echo "Here're my arguments:"
+
+# Remove processed arguments.
+shift $((OPTIND-1))
+
+echo There are $# remaining arguments:
 n=0
 for a in $@; do
 	let n=n+1
-	echo "    Argument $n: \"$a\""
+	echo "  Argument $n: \"$a\""
 done
 
 echo "All done, good bye!"
