@@ -16,6 +16,7 @@ fi
 
 # Default settings.
 name=pi-backup
+dev="/dev/mmcblk0"
 
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
@@ -26,9 +27,10 @@ $SCRIPT_NAME version $VERSION.
 Backup current SD card into an image file and put it into the target directory or FTP server.
 Syntax: $SCRIPT_NAME [options] <directory>
 Options:
--d            Delete uncompressed file after finish compressing.
+-d            Block device to backup, default is $dev.
 -h            Print this usage.
 -f <name>     Name of the backup image.
+-r            Delete uncompressed file after finish compressing.
 -z            Compress image.
 -v            Print this program version.
 NOTE: This script requires pishrink.sh from https://github.com/Drewsif/PiShrink. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
@@ -44,14 +46,16 @@ fi
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "dhf:zv" opt; do
+while getopts "d:hf:rvz" opt; do
     case ${opt} in
-    d ) remove_uncompressed=yes
+    d ) dev=$OPTARG
         ;;
     h ) print_usage
         exit
         ;;
     f ) name=$OPTARG
+        ;;
+    r ) remove_uncompressed=yes
         ;;
     z ) compress=yes
         ;;
@@ -84,6 +88,7 @@ fi
 name="$name-$(date +%Y%m%d_%H%M%S)"
 
 echo Configuration:
+echo "  Block device: $dev"
 echo "  Image name: $name"
 echo "  Target directory: $dir"
 
@@ -95,9 +100,8 @@ if [ ! -z "$remove_uncompressed" ]; then
 	echo "  Remove uncompressed: yes" 
 fi
 
-# NOTE:This script requires pishrink.sh from https://github.com/Drewsif/PiShrink. Download and put it in PATH before 
-# using this script.
-DEP="pv pigz pishrink.sh"
+# List of dependencies.
+DEP="parted pv pigz pishrink.sh"
 
 # Check dependencies first.
 echo Checking for dependencies...
@@ -115,9 +119,9 @@ done
 service cron stop
 sync; sync
 
-sd_size=`blockdev --getsize64 /dev/mmcblk0`;
+sd_size=$(blockdev --getsize64 ${dev});
 echo Backing up to \"$dir/$name.img\"...
-pv -tpreb /dev/mmcblk0 -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
+pv -tpreb $dev -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
 
 if [ $? -eq 0 ]; then
 	echo Backup image was successfully created.
