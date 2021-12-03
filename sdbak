@@ -1,0 +1,154 @@
+#!/bin/bash
+# Version of this script. Use in usage statements and version tracking.
+VERSION=0.1
+# This script's full path name.
+SCRIPT=$(readlink -f $0)
+# This script's absolute directory (without trailing slash).
+SCRIPT_DIR="$(dirname $SCRIPT)"
+# This script's base name (file name only, without directory).
+SCRIPT_NAME=$(basename $SCRIPT)
+
+# This script must be run as root/sudo.
+if [ $(id -u) -ne 0 ]; then
+	echo ERROR: must run as root/sudo.
+	exit 1
+fi
+
+# Default settings.
+name=pi-backup
+
+# A fuction to print usage statements. Usage statements might be printed more
+# than once, so it's better to make it a function.
+print_usage () {
+    # Usage statements, use heredoc. Put all statements between "USAGE" lines.
+    cat <<USAGE
+$SCRIPT_NAME version $VERSION.
+Backup current SD card into an image file and put it into the target directory or FTP server.
+Syntax: $SCRIPT_NAME [options] <directory>
+Options:
+-d            Delete uncompressed file after finish compressing.
+-h            Print this usage.
+-f <name>     Name of the backup image.
+-z            Compress image.
+-v            Print this program version.
+NOTE: This script requires pishrink.sh from https://github.com/Drewsif/PiShrink. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
+USAGE
+}
+
+# Check the number of given command line arguments.
+if [ $# -eq 0 ]; then
+    # If there's no argument, print the usage statements then exit immediately.
+    print_usage
+    exit
+fi
+
+# Now handle command line arguments based on predefined list. Refer to "getopts"
+# document to understand this code.
+while getopts "dhf:zv" opt; do
+    case ${opt} in
+    d ) remove_uncompressed=yes
+        ;;
+    h ) print_usage
+        exit
+        ;;
+    f ) name=$OPTARG
+        ;;
+    z ) compress=yes
+        ;;
+    v ) echo $SCRIPT_NAME version $VERSION.
+		exit
+        ;;
+    \? )echo "ERROR: Invalid option \"$OPTARG\""
+        exit 2
+        ;;
+    : ) echo "ERROR: Option \"$OPTARG\" requires an argument."
+        exit 3
+        ;;
+    esac
+done
+
+# Remove processed arguments.
+shift $((OPTIND-1))
+
+if [ $# -lt 1 ]; then
+	echo ERROR: Missing target. Run with \"-h\" for more info.
+	exit 4
+elif [ ! -d "$1" ]; then
+	echo ERROR: Directory \"$1\" does not exist
+	exit 5
+else
+	dir=${1%/}
+fi
+
+# Append current timestamp and the .img extension to the file name.
+name="$name-$(date +%Y%m%d_%H%M%S)"
+
+echo Configuration:
+echo "  Image name: $name"
+echo "  Target directory: $dir"
+
+if [ ! -z "$compress" ]; then
+	echo "  Compression: yes" 
+fi
+
+if [ ! -z "$remove_uncompressed" ]; then
+	echo "  Remove uncompressed: yes" 
+fi
+
+# NOTE:This script requires pishrink.sh from https://github.com/Drewsif/PiShrink. Download and put it in PATH before 
+# using this script.
+DEP="ftp pv pigz pishrink.sh"
+
+# Check dependencies first.
+echo Checking for dependencies...
+for d in $DEP; do
+	path="$(which ${d})"
+	if [ -z "$path" ]; then
+		echo "  $d command not found. Please install it first."
+		exit 1
+	else
+		echo "  Found $d at $path"
+	fi
+done
+
+# Begin the backup process.
+service cron stop
+sync; sync
+
+sd_size=`blockdev --getsize64 /dev/mmcblk0`;
+echo Backing up to \"$dir/$name.img\"...
+pv -tpreb /dev/mmcblk0 -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
+
+if [ $? -eq 0 ]; then
+	echo Backup image was successfully created.
+	echo Now shrink this image.
+	pishrink.sh -v -d "$dir/$name.img"
+
+	if [[ ! -z "$compress" ]]; then
+		echo Image was shrinked. Now compress it
+		img_size=`stat --printf="%s" "$dir/$name.img"`
+		pv -tpreb "$dir/$name.img" -s $img_size | pigz -9 > "$dir/$name.img.gz"
+		echo Compressed image:
+		ls -lh "$dir/$name.img.gz"
+
+		if [ -z "$remove_uncompressed" ]; then
+			echo Uncompressed image:
+			ls -lh "$dir/$name.img"
+		else
+			# Remove uncompressed.
+			rm -f "$dir/$name.img"
+			echo Uncompressed image was removed.
+		fi
+	fi
+
+	echo Backup done.
+	rs=0
+else
+	echo ERROR: Failed to backup.
+	rm -f "$dir/$name.img"
+	rs=6
+fi
+
+service cron start
+
+exit $rs
