@@ -1,6 +1,6 @@
 #!/bin/bash
 # Version of this script. Use in usage statements and version tracking.
-VERSION=0.1
+VERSION=0.2
 # This script's full path name.
 SCRIPT=$(readlink -f $0)
 # This script's absolute directory (without trailing slash).
@@ -15,8 +15,8 @@ if [ $(id -u) -ne 0 ]; then
 fi
 
 # Default settings.
-name=pi-backup
 dev="/dev/mmcblk0"
+name=sdcard
 
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
@@ -24,16 +24,19 @@ print_usage () {
     # Usage statements, use heredoc. Put all statements between "USAGE" lines.
     cat <<USAGE
 $SCRIPT_NAME version $VERSION.
-Backup current SD card into an image file and put it into the target directory or FTP server.
-Syntax: $SCRIPT_NAME [options] <directory>
+Syntax: $SCRIPT_NAME [options] DEV DIR 
+Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup can be shrinked using pishrink.sh and compressed with pigz.
 Options:
--d            Block device to backup, default is $dev.
 -h            Print this usage.
--f <name>     Name of the backup image.
--r            Delete uncompressed file after finish compressing.
--z            Compress image.
+-f <name>     Name of the backup image. Default is "sdcard".
+-k            Keep original image after shrinking or compressing.
+-s            Shrink backup image.
+-z            Compress backup image.
 -v            Print this program version.
-NOTE: This script requires pishrink.sh from https://github.com/Drewsif/PiShrink. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
+NOTE: 
+- This script requires root/sudo privilege.
+- This script requires pishrink.sh from https://github.com/tariusagi/PiShrink.git. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
+- Timestamp will be appended to backup file name automatically.
 USAGE
 }
 
@@ -46,18 +49,18 @@ fi
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "d:hf:rvz" opt; do
+while getopts "f:hksvz" opt; do
     case ${opt} in
-    d ) dev=$OPTARG
+    f ) name=$OPTARG
         ;;
     h ) print_usage
         exit
         ;;
-    f ) name=$OPTARG
+    k ) keep_unzip=yes
         ;;
-    r ) remove_uncompressed=yes
+    s ) shrink=yes
         ;;
-    z ) compress=yes
+    z ) zip=yes
         ;;
     v ) echo $SCRIPT_NAME version $VERSION.
 		exit
@@ -74,85 +77,94 @@ done
 # Remove processed arguments.
 shift $((OPTIND-1))
 
-if [ $# -lt 1 ]; then
-	echo ERROR: Missing target. Run with \"-h\" for more info.
+if [ $# -lt 2 ]; then
+	echo ERROR: Missing device and/or target directory.
 	exit 4
-elif [ ! -d "$1" ]; then
-	echo ERROR: Directory \"$1\" does not exist
-	exit 5
 else
-	dir=${1%/}
+	if [ ! -b "$1" ]; then
+		echo ERROR: Block device \"$1\" does not exist.
+		exit 5
+	fi
+	if [ ! -d "$2" ]; then
+		echo ERROR: Directory \"$1\" does not exist.
+		exit 6
+	fi
+	dev=$1
+	dir=${2%/}
 fi
 
 # Append current timestamp and the .img extension to the file name.
 name="$name-$(date +%Y%m%d_%H%M%S)"
 
-echo Configuration:
-echo "  Block device: $dev"
-echo "  Image name: $name"
-echo "  Target directory: $dir"
+echo Block device: $dev
+echo Image name: $name
+echo Target directory: $dir
 
-if [ ! -z "$compress" ]; then
-	echo "  Compression: yes" 
-fi
-
-if [ ! -z "$remove_uncompressed" ]; then
-	echo "  Remove uncompressed: yes" 
-fi
+test -n "$shrink" && echo Will shrink image.
+test -n "$zip" && echo Will compress image.
+test -n "$keep_unzip" && echo Will keep uncompressed image.
 
 # List of dependencies.
-DEP="parted pv pigz pishrink.sh"
+DEP="parted pv pigz losetup tune2fs md5sum e2fsck resize2fs pishrink.sh"
 
 # Check dependencies first.
-echo Checking for dependencies...
 for d in $DEP; do
 	path="$(which ${d})"
 	if [ -z "$path" ]; then
-		echo "  $d command not found. Please install it first."
-		exit 1
-	else
-		echo "  Found $d at $path"
+		echo $d command not found. Please install it first.
+		exit 7
 	fi
 done
 
 # Begin the backup process.
-service cron stop
 sync; sync
 
 sd_size=$(blockdev --getsize64 ${dev});
-echo Backing up to \"$dir/$name.img\"...
+echo Backing up $dev \($(($sd_size/1024**2))MB\) to \"$dir/$name.img\"...
 pv -tpreb $dev -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
 
 if [ $? -eq 0 ]; then
-	echo Backup image was successfully created.
-	echo Now shrink this image.
-	pishrink.sh -v -d "$dir/$name.img"
+	echo Backup image was created.
 
-	if [[ ! -z "$compress" ]]; then
-		echo Image was shrinked. Now compress it
-		img_size=`stat --printf="%s" "$dir/$name.img"`
-		pv -tpreb "$dir/$name.img" -s $img_size | pigz -9 > "$dir/$name.img.gz"
-		echo Compressed image:
-		ls -lh "$dir/$name.img.gz"
-
-		if [ -z "$remove_uncompressed" ]; then
-			echo Uncompressed image:
-			ls -lh "$dir/$name.img"
-		else
-			# Remove uncompressed.
-			rm -f "$dir/$name.img"
-			echo Uncompressed image was removed.
+	if [ -n "$shrink" ]; then
+		# Shrink.
+		echo Shrink the image.
+		pishrink.sh -d "$dir/$name.img"
+		if [ $? -ne 0 ]; then
+			echo ERROR: Failed to shrink.
+			test -f "$dir/$name.img" && rm -f "$dir/$name.img"
+			exit 9
 		fi
 	fi
 
-	echo Backup done.
-	rs=0
+	if [ -n "$zip" ]; then
+		# Compress.
+		echo Compress the image.
+		img_size=$(stat --printf="%s" "$dir/$name.img") 
+		pv -tpreb -s $img_size "$dir/$name.img" | pigz -n9 > "$dir/$name.img.gz"
+		if [ $? -ne 0 ]; then
+			echo ERROR: Failed to compressed.
+			test -f "$dir/$name.img.gz" && rm -f "$dir/$name.img.gz"
+			exit 10
+		fi
+		if [ -z "$keep_unzip" ]; then
+			echo Remove uncompressed image.
+			rm -f "$dir/$name.img"
+		fi
+	fi
+
+	if [ -z "$zip" ] || [ -n "$keep_unzip" ]; then
+		test -n "$shrink" && echo Shrunk image: || echo Original image:
+		ls -lh "$dir/$name.img"
+	fi
+
+	if [ -n "$zip" ]; then
+		echo Compressed image: && ls -lh "$dir/$name.img.gz"
+	fi
+
+	echo All done.
 else
-	echo ERROR: Failed to backup.
+	echo ERROR: Failed to create backup image.
 	rm -f "$dir/$name.img"
-	rs=6
+	exit 8
 fi
-
-service cron start
-
-exit $rs
