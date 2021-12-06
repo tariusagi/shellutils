@@ -1,0 +1,17 @@
+#!/bin/bash
+if test $# -lt 1; then
+	echo List all system services:
+	sudo systemctl list-units --type=service --all
+else
+	if test $1 == "active"; then
+		sudo systemctl list-units --type=service --state=active
+	elif test $1 == "inactive"; then
+		sudo systemctl list-units --type=service --state=inactive
+	elif test $1 == "running"; then
+		sudo systemctl list-units --type=service --state=running
+	else
+		echo ERROR: Service state \"$1\" is not supported.
+	fi
+fi
+
+echo 'Possible listing options are "active", "inactive", "running".'
