@@ -5,11 +5,16 @@ if [ $(id -u) -ne 0 ]; then
 	exit 1
 fi
 
+found=0
+umount=0
+
 while IFS= read -r -u 3 line; do
+	let found+=1
 	read -r label dev size t r dir <<< $line
 	read -r -p "Found $label ($dev, $size) mounted at \"$dir\". Unmount? (y/[n])" response
 	case $response in
 		[yY])
+			let umount+=1
 			echo Unmounting $label ...
 			umount $dev
 			rm -fr "$dir"
@@ -19,4 +24,14 @@ while IFS= read -r -u 3 line; do
 	esac
 done 3< <(lsblk -oLABEL,PATH,SIZE,TYPE,RM,MOUNTPOINT | awk '{if ($4 == "part" && $5 == 1 && $6 != "") {print}}')
 
-echo Done.
+if ! (( $found )); then
+	echo No mounted USB partition found.
+	exit
+fi
+
+if ! (( $umount )); then
+	echo No USB partiton was un-mounted.
+	exit
+fi
+
+echo $umount/$found USB partition was un-mounted.

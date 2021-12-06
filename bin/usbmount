@@ -5,11 +5,16 @@ if [ $(id -u) -ne 0 ]; then
 	exit 1
 fi
 
+found=0
+mount=0
+
 while IFS= read -r -u 3 line; do
+	let found+=1
 	read -r label dev size t r <<< $line
 	read -r -p "Found unmounted $label ($dev, $size). Mount? (y/[n])" response
 	case $response in
 		[yY])
+			let mount+=1
 			dir="/mnt/$label"
 			echo Mounting $label to \"$dir\" ...
 			test -d "$dir" || mkdir -p "$dir"
@@ -21,4 +26,14 @@ while IFS= read -r -u 3 line; do
 	esac
 done 3< <(lsblk -oLABEL,PATH,SIZE,TYPE,RM,MOUNTPOINT | awk '{if ($4 == "part" && $5 == 1 && $6 == "") {print}}')
 
-echo Done.
+if ! (( $found )); then
+	echo No new USB partition found.
+	exit
+fi
+
+if ! (( $mount )); then
+	echo No new USB partiton was mounted.
+	exit
+fi
+
+echo $mount/$found new USB partition was mounted.
