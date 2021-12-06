@@ -1,0 +1,24 @@
+#!/bin/bash
+# This script must be run as root/sudo.
+if [ $(id -u) -ne 0 ]; then
+	echo ERROR: must run as root/sudo.
+	exit 1
+fi
+
+while IFS= read -r -u 3 line; do
+	read -r label dev size t r <<< $line
+	read -r -p "Found unmounted $label ($dev, $size). Mount? (y/[n])" response
+	case $response in
+		[yY])
+			dir="/mnt/$label"
+			echo Mounting $label to \"$dir\" ...
+			test -d "$dir" || mkdir -p "$dir"
+			# Mount owner will be the user and group running sudo.
+			mount $dev "$dir" -o umask=0022,gid=$SUDO_GID,uid=$SUDO_UID
+			;;
+		*)
+			;;
+	esac
+done 3< <(lsblk -oLABEL,PATH,SIZE,TYPE,RM,MOUNTPOINT | awk '{if ($4 == "part" && $5 == 1 && $6 == "") {print}}')
+
+echo Done.

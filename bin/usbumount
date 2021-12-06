@@ -1,0 +1,22 @@
+#!/bin/bash
+# This script must be run as root/sudo.
+if [ $(id -u) -ne 0 ]; then
+	echo ERROR: must run as root/sudo.
+	exit 1
+fi
+
+while IFS= read -r -u 3 line; do
+	read -r label dev size t r dir <<< $line
+	read -r -p "Found $label ($dev, $size) mounted at \"$dir\". Unmount? (y/[n])" response
+	case $response in
+		[yY])
+			echo Unmounting $label ...
+			umount $dev
+			rm -fr "$dir"
+			;;
+		*)
+			;;
+	esac
+done 3< <(lsblk -oLABEL,PATH,SIZE,TYPE,RM,MOUNTPOINT | awk '{if ($4 == "part" && $5 == 1 && $6 != "") {print}}')
+
+echo Done.
