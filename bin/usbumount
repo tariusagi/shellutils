@@ -25,7 +25,7 @@ while IFS= read -r -u 3 line; do
 done 3< <(lsblk -oLABEL,PATH,SIZE,TYPE,RM,MOUNTPOINT | awk '{if ($4 == "part" && $5 == 1 && $6 != "") {print}}')
 
 if ! (( $found )); then
-	echo No mounted USB partition found.
+	echo No mounted, removable USB partition found.
 	exit
 fi
 
