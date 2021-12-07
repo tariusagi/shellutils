@@ -1,17 +1,29 @@
 #!/bin/bash
+# This script must be run as root/sudo.
+if [ $(id -u) -ne 0 ]; then
+	echo ERROR: must run as root/sudo.
+	exit 1
+fi
+
 if test $# -lt 1; then
 	echo List all system services:
-	sudo systemctl list-units --type=service --all
+	systemctl list-units --type=service --all
 else
 	if test $1 == "active"; then
-		sudo systemctl list-units --type=service --state=active
+		systemctl list-units --type=service --state=active
 	elif test $1 == "inactive"; then
-		sudo systemctl list-units --type=service --state=inactive
+		systemctl list-units --type=service --state=inactive
 	elif test $1 == "running"; then
-		sudo systemctl list-units --type=service --state=running
+		systemctl list-units --type=service --state=running
 	else
 		echo ERROR: Service state \"$1\" is not supported.
+		exit 1
 	fi
 fi
 
-echo 'Possible listing options are "active", "inactive", "running".'
+if (( $? )); then
+	echo INFO: systemctl failed. Try listing all with \"service\" command ...
+	service --status-all
+else
+	echo 'Possible listing options are "active", "inactive", "running".'
+fi	
