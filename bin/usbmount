@@ -1,8 +1,35 @@
 #!/bin/bash
+
+# List un-mounted USB partitions. If first argument is not empty, include non-removables, else include only
+# non-removables.
+list_unmounted() {
+	# First get a list of USB devices.
+	for disk in $(lsblk -oPATH,TRAN | awk '{if ($2 == "usb") {print $1}}'); do
+		# For each disk, get a list of its un-mounted and labeled partitions.
+		if test -n "$1"; then
+			# Include non-removables.
+			lsblk -oLABEL,PATH,SIZE,RM,MOUNTPOINT -n $disk | awk '{if (NF == 4) {print}}'
+		else
+			# Include only removables.
+			lsblk -oLABEL,PATH,SIZE,RM,MOUNTPOINT -n $disk | awk '{if (NF == 4 && $4 == 1) {print}}'
+		fi
+	done
+}
+
 # This script must be run as root/sudo.
 if [ $(id -u) -ne 0 ]; then
 	echo ERROR: must run as root/sudo.
 	exit 1
+fi
+
+# Support "lall" option, which include non-removable USB storages.
+if [ $# -gt 0 ]; then
+	if [ "$1" == "all" ]; then
+		all=yes
+	else
+		echo Unknown option. Use \"all\" to include non-removable USB storage. 
+		exit 1
+	fi
 fi
 
 found=0
@@ -10,7 +37,7 @@ mount=0
 
 while IFS= read -r -u 3 line; do
 	let found+=1
-	read -r label dev size t r <<< $line
+	read -r label dev size rm dir <<< $line
 	read -r -p "Found unmounted $label ($dev, $size). Mount? (y/[n])" response
 	case $response in
 		[yY])
@@ -24,16 +51,14 @@ while IFS= read -r -u 3 line; do
 		*)
 			;;
 	esac
-done 3< <(lsblk -oLABEL,PATH,SIZE,TYPE,RM,MOUNTPOINT | awk '{if ($4 == "part" && $5 == 1 && $6 == "") {print}}')
+done 3< <(list_unmounted $all)
 
 if ! (( $found )); then
 	echo No new USB partition found.
-	exit
-fi
-
-if ! (( $mount )); then
+elif ! (( $mount )); then
 	echo No new USB partiton was mounted.
-	exit
+else
+	echo $mount/$found new USB partition was mounted.
 fi
 
-echo $mount/$found new USB partition was mounted.
+echo NOTE: Use \"all\" to include non-removable USB storage. 
