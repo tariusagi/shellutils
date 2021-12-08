@@ -1,6 +1,9 @@
 # shellutils
 Various shell utilities for Linux-based OSes and Windows. All utilities are in `./bin` directory.
 
+# Shell prorgamming tips
+See [TIPS.md](./TIPS.md).
+
 # Install
 Clone this project, enter its directory and run `makelinks` (requires root/sudo). It will create links to all project's scripts inside `/usr/local/bin` so you can run them anywhere.
 
