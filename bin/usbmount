@@ -38,7 +38,7 @@ mount=0
 while IFS= read -r -u 3 line; do
 	let found+=1
 	read -r label dev size rm dir <<< $line
-	read -r -p "Found unmounted $label ($dev, $size). Mount? (y/[n])" response
+	read -r -p "Found unmounted $label ($dev, $size). Mount (y/[n])? " response
 	case $response in
 		[yY])
 			let mount+=1
