@@ -17,7 +17,8 @@ GOTO ADD
 :USAGE
 ECHO Add/delete port forwarding rule for a WSL distro. Need admnistrative right.
 ECHO Syntax: %0 [delete] distro_name wsl_port host_port
-ECHO IF "delete" was specified, then the forward rule will be deleted.
+ECHO If "delete" was specified, then the forward rule will be deleted.
+ECHO Run "wsl --list" to get a list of active distro(s).
 ECHO Example 1: %0 Ubuntu-20.04 80 8080
 ECHO Forward port 8080 on host computer to port 80 on Ubuntu-20.04 WSL distro.
 ECHO Example 2: %0 delete Ubuntu-20.04 80 8080
