@@ -5,11 +5,22 @@ if [ $(id -u) -ne 0 ]; then
 	exit 1
 fi
 
+err=
 bin_dir="$(dirname $(readlink -f $0))"/bin
 echo Creating links to scripts in $bin_dir inside /usr/local/bin/ ...
 for target in $(find $bin_dir -type f -executable); do
 	echo "  Linking \"$target\" ..."
 	sudo ln -fs "$target" /usr/local/bin/
+	(( $? )) && err=yes
+done
+test -n "$err" && echo WARNING: There were errors. Please check.
+
+err=
+lib_dir="$(dirname $(readlink -f $0))"/lib
+echo Creating links to scripts in $lib_dir inside /usr/local/lib/ ...
+for target in $(find $lib_dir -type f); do
+	echo "  Linking \"$target\" ..."
+	sudo ln -fs "$target" /usr/local/lib/
 	(( $? )) && err=yes
 done
 test -n "$err" && echo WARNING: There were errors. Please check.
