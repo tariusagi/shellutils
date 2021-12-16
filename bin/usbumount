@@ -1,4 +1,7 @@
 #!/bin/bash
+# Include ansilib.sh to support color output.
+source /usr/local/lib/ansilib.sh 2>/dev/null
+test $? -eq 0 || { >&2 echo ERROR: /usr/local/lib/ansilib.sh was not found; exit 1; }
 
 # List mounted USB partitions. If first argument is not empty, include non-removables, else include only non-removables.
 list_mounted() {
@@ -17,7 +20,7 @@ list_mounted() {
 
 # This script must be run as root/sudo.
 if [ $(id -u) -ne 0 ]; then
-	echo ERROR: must run as root/sudo.
+	>&2 echo $(red ERROR): must run as root/sudo.
 	exit 1
 fi
 
@@ -26,22 +29,28 @@ if [ $# -gt 0 ]; then
 	if [ "$1" == "all" ]; then
 		all=yes
 	else
-		echo Unknown option. Use \"all\" to include non-removable USB storage. 
+		>&2 echo Unknown option. Use $(yellow all) to include non-removable USB storage. 
 		exit 1
 	fi
 fi
 
 found=0
 umount=0
+cancel=
 
 while IFS= read -r -u 3 line; do
 	let found+=1
+	test -n "$cancel" && continue
 	read -r label dev size rm dir <<< $line
-	read -r -p "Found $label ($dev, $size) mounted at \"$dir\". Unmount (y/[n])? " response
+	read -r -p "Unmount $(yellow $label $size) from $(blue \"$dir\") [cyN]? " response
 	case $response in
+		[cC])
+			echo $(yellow Operation canceled).
+			cancel=yes
+			;;
 		[yY])
 			let umount+=1
-			echo Unmounting $label ...
+			echo Unmounting $(yellow $label) ...
 			umount $dev
 			rm -fr "$dir"
 			;;
@@ -55,7 +64,7 @@ if ! (( $found )); then
 elif ! (( $umount )); then
 	echo No USB partiton was un-mounted.
 else
-	echo $umount/$found USB partition was un-mounted.
+	echo $(yellow $umount/$found) USB partition\(s\) was un-mounted.
 fi
 
-echo NOTE: Use \"all\" to include non-removable USB storage.
+echo Use $(yellow \"all\") to include non-removable USB storage.

@@ -1,4 +1,7 @@
 #!/bin/bash
+# Include ansilib.sh to support color output.
+source /usr/local/lib/ansilib.sh 2>/dev/null
+test $? -eq 0 || { >&2 echo ERROR: /usr/local/lib/ansilib.sh was not found; exit 1; }
 
 # List un-mounted USB partitions. If first argument is not empty, include non-removables, else include only
 # non-removables.
@@ -18,32 +21,38 @@ list_unmounted() {
 
 # This script must be run as root/sudo.
 if [ $(id -u) -ne 0 ]; then
-	echo ERROR: must run as root/sudo.
+	>&2 echo $(red ERROR): must run as root/sudo.
 	exit 1
 fi
 
-# Support "lall" option, which include non-removable USB storages.
+# Support "all" option, which include non-removable USB storages.
 if [ $# -gt 0 ]; then
 	if [ "$1" == "all" ]; then
 		all=yes
 	else
-		echo Unknown option. Use \"all\" to include non-removable USB storage. 
+		>&2 echo $(red ERROR): Unknown option. Use $(yellow all) to include non-removable USB storage. 
 		exit 1
 	fi
 fi
 
 found=0
 mount=0
+cancel=
 
 while IFS= read -r -u 3 line; do
 	let found+=1
+	test -n "$cancel" && continue
 	read -r label dev size rm dir <<< $line
-	read -r -p "Found unmounted $label ($dev, $size). Mount (y/[n])? " response
+	read -r -p "Mount $(green $label $size) from $(green $dev) [cyN]? " response
 	case $response in
+		[cC])
+			echo $(yellow Operation canceled).
+			cancel=yes
+			;;
 		[yY])
 			let mount+=1
 			dir="/mnt/$label"
-			echo Mounting $label to \"$dir\" ...
+			echo Mounting $(green $label) to $(blue \"$dir\") ...
 			test -d "$dir" || mkdir -p "$dir"
 			# Mount owner will be the user and group running sudo.
 			mount $dev "$dir" -o umask=0022,gid=$SUDO_GID,uid=$SUDO_UID
@@ -58,7 +67,7 @@ if ! (( $found )); then
 elif ! (( $mount )); then
 	echo No new USB partiton was mounted.
 else
-	echo $mount/$found new USB partition was mounted.
+	echo $(green $mount/$found) new USB partition\(s\) was mounted.
 fi
 
-echo NOTE: Use \"all\" to include non-removable USB storage. 
+echo Use $(yellow \"all\") to include non-removable USB storage. 
