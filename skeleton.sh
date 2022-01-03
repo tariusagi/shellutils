@@ -12,7 +12,11 @@ SCRIPT_DIR="$(dirname $SCRIPT_FULLPATH)"
 SCRIPT_NAME="$(basename $SCRIPT_FULLPATH)"
 
 # Include the ansilib.sh to support color output.
-. ./lib/ansilib.sh
+ANSILIB_PATH=/usr/local/lib/ansilib.sh
+if [ -f $ANSILIB_PATH ]; then
+	export ANSILIB=yes
+	. $ANSILIB_PATH
+fi
 
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
@@ -56,10 +60,14 @@ fi
 while getopts "chn:v" opt; do
 	case ${opt} in
 	c)
-		color=yes
+		if [ -n "$ANSILIB" ]; then
+			color=yes
+		else
+			>&2 echo WARN: $ANSILIB_PATH not found. Color is not supported.
+		fi
 		;;
 	h)
-		if [ "$color" == "yes" ]; then
+		if [ -n "$ANSILIB" ]; then
 			print_color_usage
 		else
 			print_usage
