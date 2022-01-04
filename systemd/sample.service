@@ -1,0 +1,39 @@
+# This is a sample service file for systemd.
+# Make necessary changes and put this file int /etc/systemd/system/, rename it
+# to its purpose, such as "mybackup.service", then run:
+#   $ sudo systemctl daemon-reload
+# to reload all service unit files, including this one. After that, use service
+# commands such as "systemctl" and "journalctl" with it, such as:
+#   $ sudo systemctl enable mybackup
+#   $ sudo systemctl start mybackup
+#   $ sudo systemctl reload mybackup
+#   $ sudo systemctl restart mybackup
+#   $ sudo systemctl stop mybackup
+#   $ sudo systemctl disable mybackup
+#   $ sudo journalctl -fu mybackup
+# Man page: https://www.freedesktop.org/software/systemd/man/systemd.html
+
+[Unit]
+Description=Sample service
+# This service requires network to be online (got IP assigned).
+Wants=network-online.target
+After=network-online.target
+# This service depend on the following absolute path. Mount unit which 
+# responsible for this path will be pulled if needed.
+RequiresMountsFor=/mnt/usb/backup
+
+[Service]
+User=phuong
+Group=phuong
+ExecStart=/home/phuong/bin/sample-service.sh
+WorkingDirectory=/home/phuong/
+# Reload service configuration by sending SIGHUP signal.
+ExecReload=kill -HUP $MAINPID
+# Will not automatically restart this service.
+Restart=no
+# Redirect stdout and stderr to files.
+StandardOutput=append:/home/phuong/log/sample-service.log
+StandardError=append:/home/phuong/log/sample-service.err
+
+[Install]
+WantedBy=multi-user.target
