@@ -86,7 +86,7 @@ else
 		exit 5
 	fi
 	if [ ! -d "$2" ]; then
-		echo ERROR: Directory \"$1\" does not exist.
+		echo ERROR: Directory \"$2\" does not exist.
 		exit 6
 	fi
 	dev=$1
