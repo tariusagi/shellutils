@@ -153,6 +153,8 @@ if [ $? -eq 0 ]; then
 		fi
 	fi
 
+	sync
+
 	if [ -z "$zip" ] || [ -n "$keep_unzip" ]; then
 		test -n "$shrink" && echo Shrunk image: || echo Original image:
 		ls -lh "$dir/$name.img"
