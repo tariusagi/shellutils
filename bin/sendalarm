@@ -1,0 +1,63 @@
+#!/bin/bash
+if [ $# -lt 1 ]; then
+	cat <<-USAGE
+	Send an alarm signal to lcdserver and/or alarmserver. The IPs and ports of the
+	servers must be set in the envar LCD_SERVER and BUZZER_SERVER before calling
+	this program, for example: "export LCD_SERVER="192.168.1.2 1234".
+
+	Syntax: sendalarm [signal] [message]
+
+	where:
+	- signal: one of "on", "off", "info", "ok", "warn", "error", which turns on or
+	off the buzzer, or make different sounds.
+	- message: will be displayed on the LCD. It must start with a LCD line number.
+
+	Example:
+		sendalarm info line1 Backup started
+		sendalarm warn line2 DB err, fixing
+		sendalarm error line2 DB fix failed
+		sendalarm ok line1 Backup done
+	USAGE
+	exit
+fi
+
+signal=$1
+
+case "$signal" in
+	on) tone="on";;
+	off) tone="off";;
+	info) tone="on -t0.1 -i0.1 -n1";;
+	ok) tone="on -t0.1 -i0.1 -n2";;
+	warn) tone="on -t0.3 -i0.1 -n2";;
+	error) tone="on -t0.5 -i0.1 -n3";;
+esac
+
+if [ -n "$tone" ]; then
+	shift 1
+fi
+
+msg="$*"
+
+if [ -n "$tone" ]; then
+	if [ -z "$BUZZER_SERVER" ]; then
+		>&2 echo ERROR: BUZZER_SERVER not found. Please defined it first.
+		>&2 echo Example: export BUZZER_SERVER=\"192.168.1.2 1235\"
+		exit 1
+	else
+		echo Sending signal \"$tone\" to $BUZZER_SERVER
+		echo "$tone" | nc -w1 $BUZZER_SERVER > /dev/null
+	fi
+fi
+
+if [ -n "$msg" ]; then
+	if [ -z "$LCD_SERVER" ]; then
+		>&2 echo ERROR: LCD_SERVER not found. Please defined it first.
+		>&2 echo Example: export LCD_SERVER=\"192.168.1.2 1234\"
+		exit 1
+	else
+		echo Sending message \"$msg\" to $LCD_SERVER
+		echo "$msg" | nc -w1 $LCD_SERVER > /dev/null
+	fi
+fi
+echo Done
+
