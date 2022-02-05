@@ -73,7 +73,7 @@ function show_all() {
 	local ips=($(get_ips))
 	# There can be multiple IPs. Show all of them one by one.
 	for ip in "${ips[@]}"; do
-		show IP $ip
+		show $ip
 	done
 	show $(get_cpu_stat)
 	show $(get_mem_usage)
