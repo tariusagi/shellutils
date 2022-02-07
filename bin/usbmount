@@ -50,12 +50,17 @@ while IFS= read -r -u 3 line; do
 			cancel=yes
 			;;
 		[yY])
-			let mount+=1
 			dir="/mnt/$label"
 			echo Mounting $(green $label) to $(blue \"$dir\") ...
 			test -d "$dir" || mkdir -p "$dir"
 			# Mount owner will be the user and group running sudo.
 			mount $dev "$dir" -o umask=0022,gid=$SUDO_GID,uid=$SUDO_UID
+			if [ $? -eq 0 ]; then
+				let mount+=1
+			else
+				echo $(red ERROR): Failed to mount $(green $label).
+				rm -fr "$dir"
+			fi
 			;;
 		*)
 			;;

@@ -27,12 +27,14 @@ $SCRIPT_NAME version $VERSION.
 Syntax: $SCRIPT_NAME [options] DEV DIR 
 Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup can be shrinked using pishrink.sh and compressed with pigz.
 Options:
--h            Print this usage.
--f <name>     Name of the backup image. Default is "sdcard".
--k            Keep original image after shrinking or compressing.
--s            Shrink backup image.
--z            Compress backup image.
--v            Print this program version.
+-h        Print this usage.
+-f <name> Name of the backup image. Default is "sdcard".
+-k        Keep original image after shrinking or compressing.
+-s        Shrink backup image.
+-S        Shrink more: remove logs, apt archives, DHCP leases & SSH hostkeys
+          before shrinking.
+-z        Compress backup image.
+-v        Print this program version.
 NOTE: 
 - This script requires root/sudo privilege.
 - This script requires pishrink.sh from https://github.com/tariusagi/PiShrink.git. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
@@ -49,7 +51,7 @@ fi
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "f:hksvz" opt; do
+while getopts "f:hksSvz" opt; do
     case ${opt} in
     f ) name=$OPTARG
         ;;
@@ -59,6 +61,9 @@ while getopts "f:hksvz" opt; do
     k ) keep_unzip=yes
         ;;
     s ) shrink=yes
+        ;;
+    S ) shrink=yes;
+			  shrink_more=yes;
         ;;
     z ) zip=yes
         ;;
@@ -101,6 +106,7 @@ echo Image name: $name
 echo Target directory: $dir
 
 test -n "$shrink" && echo Will shrink image.
+test -n "$shrink_more" && echo Will clean up redundant data before shrinking.
 test -n "$zip" && echo Will compress image.
 test -n "$keep_unzip" && echo Will keep uncompressed image.
 
@@ -128,8 +134,13 @@ if [ $? -eq 0 ]; then
 
 	if [ -n "$shrink" ]; then
 		# Shrink.
-		echo Shrink the image.
-		pishrink.sh -d "$dir/$name.img"
+		if [ -n "$shrink_more" ]; then
+			echo Clean up redundant data and shrink the image.
+			pishrink.sh -d -p "$dir/$name.img"
+		else
+			echo Shrink the image.
+			pishrink.sh -d "$dir/$name.img"
+		fi
 		if [ $? -ne 0 ]; then
 			echo ERROR: Failed to shrink.
 			test -f "$dir/$name.img" && rm -f "$dir/$name.img"

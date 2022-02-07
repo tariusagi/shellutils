@@ -49,12 +49,20 @@ while IFS= read -r -u 3 line; do
 			cancel=yes
 			;;
 		[yY])
-			let umount+=1
 			echo Unmounting $(yellow $label) ...
-			udisksctl unmount -b $dev
-			udisksctl power-off -b $dev
-			echo $(yellow $label) was powered-off and can be safely removed now.
-			rm -fr "$dir"
+			umount $dev
+			if [ $? -eq 0 ]; then
+				let umount+=1
+				rm -fr "$dir"
+				udisksctl power-off -b $dev
+				if [ $? -eq 0 ]; then
+					echo $(yellow $label) was powered-off and can be safely removed now.
+				else
+					echo $(red ERROR): Failed to power off $(yellow $label).
+				fi
+			else
+				echo $(red ERROR): Failed to un-mount $(yellow $label).
+			fi
 			;;
 		*)
 			;;
