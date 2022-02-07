@@ -70,4 +70,5 @@ else
 	echo $(green $mount/$found) new USB partition\(s\) was mounted.
 fi
 
-echo Use $(yellow \"all\") to include non-removable USB storage. 
+echo Use $(yellow \"all\") to include USB hard disks.
+echo Use $(green \"sudo usbumount\") to un-mount USB storages.

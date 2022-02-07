@@ -46,11 +46,9 @@ function get_cpu_stat() {
 	echo CPU $load ${temp}oC
 }
 
-function get_root_usage() {
-	local root_info=$(df -h /)
-	local usage=$(awk '/\// {print $(NF-1)}' <<<${root_info} | sed 's/%//g')
-	local total=$(awk '/\// {print $(NF-4)}' <<<${root_info})
-	echo Root $(df -h | awk '$NF == "/" {s=$3"/"$2; gsub("G", "", s); print s"G"}') 
+function disk_usage() {
+	# Use the first argument as the disk mount point to check.
+	echo $1 $(df -h $1 | awk 'FNR==2{printf "%s/%s\n", $3, $2}')
 }
 
 function get_mem_usage() {
@@ -75,10 +73,13 @@ function show_all() {
 	for ip in "${ips[@]}"; do
 		show $ip
 	done
+	show $(get_uptime)
 	show $(get_cpu_stat)
 	show $(get_mem_usage)
-	show $(get_root_usage)
-	show $(get_uptime)
+	show $(disk_usage /)
+	for d in $mounts; do
+		show $(disk_usage $d)
+	done
 }
 
 function on_exit() {
@@ -95,6 +96,7 @@ print_usage () {
 	Options:
 	-h            Print this usage.
 	-i sec        Seconds between metrics. Default none or 1 if show on a LCD.
+	-m dir        Add mount point dir to list of disk usage report.
 	-n name       Name of the system. Default is the hostname.
 	-r            Repeat.
 	-s host       Address of a LCD server.
@@ -109,11 +111,12 @@ export port=1234
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "hi:l:n:p:rs:" opt; do
+while getopts "hi:l:m:n:p:rs:" opt; do
 	case ${opt} in
 	h ) print_usage; exit ;;
 	i ) interval=$OPTARG ;;
 	l ) line=$OPTARG ;;
+	m ) mounts="$mounts $OPTARG" ;;
 	n ) name=$OPTARG ;;
 	p ) port=$OPTARG ;;
 	r ) repeat=True ;;

@@ -51,7 +51,9 @@ while IFS= read -r -u 3 line; do
 		[yY])
 			let umount+=1
 			echo Unmounting $(yellow $label) ...
-			umount $dev
+			udisksctl unmount -b $dev
+			udisksctl power-off -b $dev
+			echo $(yellow $label) was powered-off and can be safely removed now.
 			rm -fr "$dir"
 			;;
 		*)
@@ -67,4 +69,5 @@ else
 	echo $(yellow $umount/$found) USB partition\(s\) was un-mounted.
 fi
 
-echo Use $(yellow \"all\") to include non-removable USB storage.
+echo Use $(yellow \"all\") to include USB hard disks.
+echo Use $(green \"sudo usbmount\") to mount USB storages.
