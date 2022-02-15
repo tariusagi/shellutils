@@ -12,6 +12,7 @@ function show() {
 	echo $*
 	# Display on LCD server if $LCD_SERVER was defined.
 	if [ -n "$lcd" ]; then
+		echo Displaying on LCD server at $lcd:$port
 		echo line${line} ${name:-$(hostname)}: $* | nc -w1 $lcd $port
 		test -n "$interval" && sleep $interval || sleep 1
 	else
@@ -36,14 +37,18 @@ function get_ips() {
 	echo ${ips[@]}
 }
 
-function get_cpu_stat() {
+function get_load() {
 	local load=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1"%"}')
+	echo CPU ${load}oC
+}
+
+function get_temp() {
 	if [ -f /sys/class/thermal/thermal_zone0/temp ]; then
 		local temp=$(($(cat /sys/class/thermal/thermal_zone0/temp)/1000))
 	else
 		local temp=??
 	fi
-	echo CPU $load ${temp}oC
+	echo Temp ${temp}oC
 }
 
 function disk_usage() {
@@ -65,21 +70,25 @@ function get_uptime() {
 	echo Up $time
 }
 
-function show_all() {
-	echo System info:
-	echo ------------
-	local ips=($(get_ips))
-	# There can be multiple IPs. Show all of them one by one.
-	for ip in "${ips[@]}"; do
-		show $ip
+function show_targets() {
+	echo Showing $targets
+	IFS=,
+	for t in $targets; do
+		case $t in
+			ip)
+				local ips=($(get_ips))
+				for ip in "${ips[@]}"; do
+					show $ip
+				done
+				;;
+			load) show $(get_load) ;;
+			temp) show $(get_temp) ;;
+			mem) show $(get_mem_usage) ;;
+			disk) for d in $mounts; do show $(disk_usage $d); done ;;
+			up) show $(get_uptime);;
+		esac
 	done
-	show $(get_uptime)
-	show $(get_cpu_stat)
-	show $(get_mem_usage)
-	show $(disk_usage /)
-	for d in $mounts; do
-		show $(disk_usage $d)
-	done
+	unset IFS
 }
 
 function on_exit() {
@@ -101,17 +110,22 @@ print_usage () {
 	-r            Repeat.
 	-s host       Address of a LCD server.
 	-p port       Port of a LCD server. Default is 1234.
+	-t list       List of target info to show, separated by commas. Supported
+								targets are up (means uptime), load, temp, mem, ip, disk. If
+	              this option is omitted, all targets will be shown.
 	-l num        Line to be printed on the LCD.
 	USAGE
 }
 
 # Default settings.
 line=1
-export port=1234
+port=1234
+targets=up,load,temp,mem,ip,disk
+mounts=/
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "hi:l:m:n:p:rs:" opt; do
+while getopts "hi:l:m:n:p:rs:t:" opt; do
 	case ${opt} in
 	h ) print_usage; exit ;;
 	i ) interval=$OPTARG ;;
@@ -121,6 +135,7 @@ while getopts "hi:l:m:n:p:rs:" opt; do
 	p ) port=$OPTARG ;;
 	r ) repeat=True ;;
 	s ) lcd=$OPTARG ;;
+	t ) targets=$OPTARG ;;
 	\? )echo "ERROR: Invalid option \"$OPTARG\""; exit 2 ;;
 	: ) echo "ERROR: Option \"$OPTARG\" requires an argument."; exit 3 ;;
 	esac
@@ -130,8 +145,8 @@ if [ -n "$repeat" ]; then
 	# Repeat.
 	trap on_exit INT TERM
 	while true; do
-		show_all
+		show_targets
 	done
 else
-	show_all
+	show_targets
 fi
