@@ -72,8 +72,9 @@ function get_uptime() {
 
 function show_targets() {
 	echo Showing $targets
-	IFS=,
-	for t in $targets; do
+	# Replace commas in targets list with space so Bash's default delimiter works.
+	local s=${targets//,/ }
+	for t in $s; do
 		case $t in
 			ip)
 				local ips=($(get_ips))
@@ -88,7 +89,6 @@ function show_targets() {
 			up) show $(get_uptime);;
 		esac
 	done
-	unset IFS
 }
 
 function on_exit() {
