@@ -127,7 +127,6 @@ sd_size=$((size * $sector_size))
 echo "Total sectors:  $(pretty_num $size)"
 echo "Total size:    " $(pretty_num $sd_size) "bytes"
 echo Backing up $dev \($(pretty_num $(($sd_size/1024**2))) MB\) to \"$dir/$name.img\"...
-exit
 pv -tpreb $dev -S -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
 
 if [ $? -eq 0 ]; then
