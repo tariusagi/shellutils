@@ -13,7 +13,11 @@ function show() {
 	# Display on LCD server if $LCD_SERVER was defined.
 	if [ -n "$lcd" ]; then
 		echo Displaying on LCD server at $lcd:$port
-		echo line${line} ${name:-$(hostname)}: $* | nc -w1 $lcd $port
+		if [ -z "$noname" ]; then
+			echo line${line} ${name:-$(hostname)}: $* | nc -w1 $lcd $port
+		else
+			echo line${line} $* | nc -w1 $lcd $port
+		fi
 		test -n "$interval" && sleep $interval || sleep 1
 	else
 		test -n "$interval" && sleep $interval
@@ -107,6 +111,7 @@ print_usage () {
 	-i sec        Seconds between metrics. Default none or 1 if show on a LCD.
 	-m dir        Add mount point dir to list of disk usage report.
 	-n name       Name of the system. Default is the hostname.
+	-N            Disable showing system name.
 	-r            Repeat.
 	-s host       Address of a LCD server.
 	-p port       Port of a LCD server. Default is 1234.
@@ -125,13 +130,14 @@ mounts=/
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "hi:l:m:n:p:rs:t:" opt; do
+while getopts "hi:l:m:n:Np:rs:t:" opt; do
 	case ${opt} in
 	h ) print_usage; exit ;;
 	i ) interval=$OPTARG ;;
 	l ) line=$OPTARG ;;
 	m ) mounts="$mounts $OPTARG" ;;
 	n ) name=$OPTARG ;;
+	N ) noname=true ;;
 	p ) port=$OPTARG ;;
 	r ) repeat=True ;;
 	s ) lcd=$OPTARG ;;
