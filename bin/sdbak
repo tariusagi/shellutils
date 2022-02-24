@@ -16,7 +16,7 @@ fi
 
 # Default settings.
 dev="/dev/mmcblk0"
-name=sdcard
+name=$(hostname)
 
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
@@ -27,14 +27,14 @@ $SCRIPT_NAME version $VERSION.
 Syntax: $SCRIPT_NAME [options] DEV DIR 
 Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup can be shrinked using pishrink.sh and compressed with pigz.
 Options:
--h        Print this usage.
--f <name> Name of the backup image. Default is "sdcard".
--k        Keep original image after shrinking or compressing.
--s        Shrink backup image.
--S        Shrink more: remove logs, apt archives, DHCP leases & SSH hostkeys
-          before shrinking.
--z        Compress backup image.
--v        Print this program version.
+-h            Print this usage.
+-e n          Size of the target rootfs to expand during first boot. See "size"
+              argument of the size2fs command. Ex: "-e 4.5G".
+-f <name>     Name of the backup image. Default is the current hostname.
+-k            Keep original image after shrinking or compressing.
+-s            Shrink backup image.
+-z            Compress backup image.
+-v            Print this program version.
 NOTE: 
 - This script requires root/sudo privilege.
 - This script requires pishrink.sh from https://github.com/tariusagi/PiShrink.git. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
@@ -51,8 +51,10 @@ fi
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "f:hksSvz" opt; do
+while getopts "e:f:hksvz" opt; do
     case ${opt} in
+    e ) newsize=$OPTARG
+        ;;
     f ) name=$OPTARG
         ;;
     h ) print_usage
@@ -125,20 +127,25 @@ done
 # Begin the backup process.
 sync; sync
 
-sd_size=$(blockdev --getsize64 ${dev});
+sector_size=$(sudo fdisk -l $dev | grep 'Sector size' | awk '{print $7}')
+echo "Sector size:    $sector_size"
+size=$(fdisk -l $dev | grep ^$dev | awk 'END {print $3}')
+sd_size=$((size * $sector_size))
+echo "Total sectors:  $size"
+echo "Total size:     $sd_size bytes"
+# sd_size=$(blockdev --getsize64 ${dev});
 echo Backing up $dev \($(($sd_size/1024**2))MB\) to \"$dir/$name.img\"...
-pv -tpreb $dev -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
+pv -tpreb $dev -S -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
 
 if [ $? -eq 0 ]; then
 	echo Backup image was created.
 
 	if [ -n "$shrink" ]; then
 		# Shrink.
-		if [ -n "$shrink_more" ]; then
-			echo Clean up redundant data and shrink the image.
-			pishrink.sh -d -p "$dir/$name.img"
+		echo Shrink the image.
+		if [ -n "$newsize" ]; then
+			pishrink.sh -d -e $newsize "$dir/$name.img"
 		else
-			echo Shrink the image.
 			pishrink.sh -d "$dir/$name.img"
 		fi
 		if [ $? -ne 0 ]; then
