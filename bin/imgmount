@@ -1,0 +1,218 @@
+#!/bin/bash
+# Version of this script. Use in usage statements and version tracking.
+VERSION=0.1
+# This script's full path name.
+SCRIPT_FULLPATH="$(readlink -f $0)"
+# This script's absolute directory (without trailing slash).
+SCRIPT_DIR="$(dirname $SCRIPT_FULLPATH)"
+# This script's base name (file name only, without directory).
+SCRIPT_NAME="$(basename $SCRIPT_FULLPATH)"
+# Path to ansilib.sh, which supports color text output.
+ANSILIB_PATH=/usr/local/lib/ansilib.sh
+# Aliases to include caller line number in message functions.
+shopt -s expand_aliases
+alias info='info_msg $LINENO'
+alias warn='warn_msg $LINENO'
+alias error='error_msg $LINENO'
+alias fatal='fatal_msg $LINENO'
+
+timestamp() { date +"%Y-%m-%d %H:%M:%S"; }
+
+info_msg() {
+	# Print an info message. Caller line number is the first argument.
+	line=$1
+	shift
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) INFO  ($SCRIPT_NAME:$line): $*"
+	else
+		>&2 echo "$(timestamp) INFO  ($(green $SCRIPT_NAME:$line)): $*"
+	fi
+}
+
+warn_msg() {
+	# Print an warning message. Caller line number is the first argument.
+	line=$1
+	shift
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) WARN  ($SCRIPT_NAME:$line): $*"
+	else
+		>&2 echo "$(timestamp) $(yellow WARN)  ($(green $SCRIPT_NAME:$line)): $*"
+	fi
+}
+
+error_msg() {
+	# Print an error message. Caller line number is the first argument.
+	line=$1
+	shift
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) ERROR ($SCRIPT_NAME:$line): $*"
+	else
+		>&2 echo "$(timestamp) $(red ERROR) ($(green $SCRIPT_NAME:$line)): $*"
+	fi
+}
+
+fatal_msg() {
+	# Print an fatal message then quit. Caller line number is the first argument,
+	# and the second is the exit code.
+	line=$1
+	code=$2
+	shift 2
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) FATAL ($SCRIPT_NAME:$line, code $code): $*"
+	else
+		>&2 echo "$(timestamp) $(purple FATAL) ($(green $SCRIPT_NAME:$line, $(purple code $code))): $*"
+	fi
+	exit $code
+}
+
+# Include ansilib and enable color support if possible.
+if [ -f $ANSILIB_PATH ]; then
+	color=yes
+	. $ANSILIB_PATH
+fi
+
+# A fuction to print usage statements. Usage statements might be printed more
+# than once, so it's better to make it a function.
+print_usage () {
+	# Usage statements, use heredoc. Put all statements between "USAGE" lines.
+	if [ -z "$color" ]; then
+		cat <<-USAGE
+			$SCRIPT_NAME version $VERSION.
+			Mount/unmount disk/partition image.
+			Syntax: $SCRIPT_NAME [options] image dir
+			Options:
+			image           Path to the image.
+			dir             Mount point (a directory).
+			-h              Print this usage.
+			-p n            Mount the "n"th partition in the image. Default is 1.
+			-r              Mount in read-only mode.
+			-v              Print this program version.
+			USAGE
+	else
+		cat <<-COLORUSAGE
+			$(ugreen $SCRIPT_NAME) version $(red $(yellow_bg $VERSION)).
+			Say hello to given name and print out all given command line arguments.
+			Syntax: $(green $SCRIPT_NAME) $(yellow [options])
+			$(yellow Options:)
+			image           Path to the image.
+			dir             Mount point (a directory).
+			-h              Print this usage.
+			-p n            Mount the "n"th partition in the image. Default is 1.
+			-r              Mount in read-only mode.
+			-v              Print this program version.
+			COLORUSAGE
+	fi
+}
+
+# Check the number of given command line arguments.
+if [[ $# -eq 0 ]]; then
+	# No argument? Print a reminder.
+	print_usage
+	exit
+fi
+
+# Now handle command line option based on predefined list. Refer to "getopts"
+# document to understand this code.
+while getopts ":hp:rv" opt; do
+	case ${opt} in
+	h) print_usage; exit ;;
+	p) part_no=$OPTARG ;;
+	r) readonly=true ;;
+	v) echo $SCRIPT_NAME version $VERSION; exit ;;
+	\?) fatal 1 "Invalid option \"$OPTARG\"" ;;
+	:) fatal 2 "Option \"$OPTARG\" requires an argument." ;;
+	esac
+done
+
+# Remove processed arguments.
+shift $((OPTIND-1))
+
+# This script must be run as root/sudo.
+if [ $(id -u) -ne 0 ]; then
+	fatal 3 Require root/sudo privilege.
+fi
+
+# Check image file.
+if [ $# -lt 2 ]; then
+	fatal 4 Missing image file and/or mount point.
+elif [ ! -f "$1" ]; then
+	fatal 5 \"$1\" is not a file.
+else
+	img=$1
+	dir=$2
+	if [ ! -d "$dir" ]; then
+		info \"$dir\" does not exist. Creating it...
+		mkdir -p "$dir"
+	fi
+fi
+
+# Analyze the image.
+echo Analyzing image...
+IFS=$'
+'
+parts=($(fdisk -l $img | grep -e "^Sector size" -e "^Device" -e "^$img"))
+
+if [ ${#parts[@]} -lt 3 ]; then
+	fatal 6 "This is not a valid image."
+fi
+
+n=0
+for part in ${parts[@]}; do
+	if [ $n -eq 0 ]; then
+		sector_size=$(awk '{print $4}' <<<"$part")
+		echo "Sector size: $sector_size bytes"
+	elif [ $n -eq 1 ]; then
+		echo Partitions list:
+		if [ -z "$color" ]; then
+			echo "# $part"
+		else
+			echo $(blue "# $part")
+		fi
+	else
+		if [ -z "$color" ]; then
+			echo "$((n - 1)) $part"
+		else
+			echo $(hblue "$((n - 1)) $part")
+		fi
+	fi
+	let n+=1
+done
+unset IFS
+
+if [[ -n "$part_no" && $part_no -gt 0 && $part_no -lt $((${#parts[@]} - 1)) ]]; then
+	part=${parts[$((part_no + 1))]}
+else
+	# Ask for target partition.
+	while true; do
+		read -r -p "Which partition number to mount (Ctrl-C to cancel)? " part_no
+		if [[ $part_no -gt 0 && $part_no -lt $((${#parts[@]} - 1)) ]]; then
+			part=${parts[$((part_no + 1))]}
+			break
+		else
+			echo $part_no is invalid. Please choose again.
+		fi
+	done
+fi
+
+echo Will mount partiton $part_no from $img to $dir
+
+# Find a free loop device.
+dev=$(losetup -f)
+first_sector=$(awk '{print $2}' <<<"$part")
+offset=$(($sector_size * $first_sector))
+echo Attaching partition $part_no from sector $first_sector, offset $offset to $dev
+losetup -o $offset /dev/loop0 $img
+if [ $? -ne 0 ]; then
+	fatal 6 Failed to attach.
+fi
+mount /dev/loop0 $dir
+if [ $? -ne 0 ]; then
+	fatal 7 Failed to mount.
+fi
+if [ -n "$color" ]; then
+	echo $(green Mounted to $dir. You can start using it now.)
+	echo $(yellow "NOTE: Run \"sudo umount $dev\" then \"sudo losetup -d $dev\"" to detach.)
+else
+	echo Mounted to $dir. You can start using it now.
+	echo "NOTE: Run \"sudo umount $dev\" then \"sudo losetup -d $dev\"" to detach.
+fi
