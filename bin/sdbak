@@ -8,9 +8,14 @@ SCRIPT_DIR="$(dirname $SCRIPT)"
 # This script's base name (file name only, without directory).
 SCRIPT_NAME=$(basename $SCRIPT)
 
+function pretty_num(){
+	# Print a pretty_num with thousand separator.
+	printf "%'d" $1
+}
+
 # This script must be run as root/sudo.
 if [ $(id -u) -ne 0 ]; then
-	echo ERROR: must run as root/sudo.
+	>&2 echo ERROR: must run as root/sudo.
 	exit 1
 fi
 
@@ -21,28 +26,29 @@ name=$(hostname)
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
 print_usage () {
-    # Usage statements, use heredoc. Put all statements between "USAGE" lines.
-    cat <<USAGE
-$SCRIPT_NAME version $VERSION.
-Syntax: $SCRIPT_NAME [options] DEV DIR 
-Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup can be shrinked using pishrink.sh and compressed with pigz.
-Options:
--h            Print this usage.
--e n          Size of the target rootfs to expand during first boot. See "size"
-              argument of the size2fs command. Ex: "-e 4.5G".
--f <name>     Name of the backup image. Default is the current hostname.
--k            Keep original image after shrinking or compressing.
--s            Shrink backup image.
--z            Compress backup image.
--v            Print this program version.
-NOTE: 
-- This script requires root/sudo privilege.
-- This script requires pishrink.sh from https://github.com/tariusagi/PiShrink.git. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
-- Timestamp will be appended to backup file name automatically.
-USAGE
+	# Usage statements, use heredoc. Put all statements between "USAGE" lines.
+	cat <<-USAGE
+	$SCRIPT_NAME version $VERSION.
+	Syntax: $SCRIPT_NAME [options] DEV DIR 
+	Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup can be shrinked using pishrink.sh and compressed with pigz.
+	Options:
+	-c         Compress backup image.
+	-h         Print this usage.
+	-f <name>  Name of the backup image. Default is the current hostname.
+	-k         Keep original image after shrinking or compressing.
+	-l n       Limit size to expand the rootfs during first boot. See "size" argument of the size2fs command. Ex: "-l 4.5G".
+	-n         Don't expand filesystem when image is booted the first time
+	-p         Purge redudant files (logs, apt archives, temp...).
+	-s         Shrink backup image.
+	-v         Print this program version.
+	NOTE: 
+	- This script requires root/sudo privilege.
+	- This script requires pishrink.sh from https://github.com/tariusagi/PiShrink.git. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
+	- Timestamp will be appended to backup file name automatically.
+	USAGE
 }
 
-# Check the number of given command line arguments.
+# Check the pretty_num of given command line arguments.
 if [ $# -eq 0 ]; then
     # If there's no argument, print the usage statements then exit immediately.
     print_usage
@@ -51,33 +57,19 @@ fi
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "e:f:hksvz" opt; do
+while getopts "cf:hkl:npsv" opt; do
     case ${opt} in
-    e ) newsize=$OPTARG
-        ;;
-    f ) name=$OPTARG
-        ;;
-    h ) print_usage
-        exit
-        ;;
-    k ) keep_unzip=yes
-        ;;
-    s ) shrink=yes
-        ;;
-    S ) shrink=yes;
-			  shrink_more=yes;
-        ;;
-    z ) zip=yes
-        ;;
-    v ) echo $SCRIPT_NAME version $VERSION.
-		exit
-        ;;
-    \? )echo "ERROR: Invalid option \"$OPTARG\""
-        exit 2
-        ;;
-    : ) echo "ERROR: Option \"$OPTARG\" requires an argument."
-        exit 3
-        ;;
+    c) compress=yes ;;
+    f) name=$OPTARG ;;
+    h) print_usage; exit ;;
+    k) keep_img=yes ;;
+    l) limit_size=$OPTARG ;;
+    n) noexpand='-n' ;;
+		p) shrink=yes; purge='-p' ;;
+    s) shrink=yes ;;
+    v) echo $SCRIPT_NAME version $VERSION; exit ;;
+    \?)>&2 echo "ERROR: Invalid option \"$OPTARG\""; exit 2 ;;
+    :) >&2 echo "ERROR: Option \"$OPTARG\" requires an argument."; exit 3 ;;
     esac
 done
 
@@ -85,15 +77,15 @@ done
 shift $((OPTIND-1))
 
 if [ $# -lt 2 ]; then
-	echo ERROR: Missing device and/or target directory.
+	>&2 echo ERROR: Missing device and/or target directory.
 	exit 4
 else
 	if [ ! -b "$1" ]; then
-		echo ERROR: Block device \"$1\" does not exist.
+		>&2 echo ERROR: Block device \"$1\" does not exist.
 		exit 5
 	fi
 	if [ ! -d "$2" ]; then
-		echo ERROR: Directory \"$2\" does not exist.
+		>&2 echo ERROR: Directory \"$2\" does not exist.
 		exit 6
 	fi
 	dev=$1
@@ -108,9 +100,10 @@ echo Image name: $name
 echo Target directory: $dir
 
 test -n "$shrink" && echo Will shrink image.
-test -n "$shrink_more" && echo Will clean up redundant data before shrinking.
-test -n "$zip" && echo Will compress image.
-test -n "$keep_unzip" && echo Will keep uncompressed image.
+test -n "$purge" && echo Will purge redundant data before shrinking.
+test -n "$compress" && echo Will compress image.
+test -n "$keep_img" && echo Will keep uncompressed image.
+test -n "$limit_size" && echo Will limit rootfs size to $limit_size.
 
 # List of dependencies.
 DEP="parted pv pigz losetup tune2fs md5sum e2fsck resize2fs pishrink.sh"
@@ -131,10 +124,10 @@ sector_size=$(sudo fdisk -l $dev | grep 'Sector size' | awk '{print $7}')
 echo "Sector size:    $sector_size"
 size=$(fdisk -l $dev | grep ^$dev | awk 'END {print $3}')
 sd_size=$((size * $sector_size))
-echo "Total sectors:  $size"
-echo "Total size:     $sd_size bytes"
-# sd_size=$(blockdev --getsize64 ${dev});
-echo Backing up $dev \($(($sd_size/1024**2))MB\) to \"$dir/$name.img\"...
+echo "Total sectors:  $(pretty_num $size)"
+echo "Total size:    " $(pretty_num $sd_size) "bytes"
+echo Backing up $dev \($(pretty_num $(($sd_size/1024**2))) MB\) to \"$dir/$name.img\"...
+exit
 pv -tpreb $dev -S -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
 
 if [ $? -eq 0 ]; then
@@ -143,29 +136,29 @@ if [ $? -eq 0 ]; then
 	if [ -n "$shrink" ]; then
 		# Shrink.
 		echo Shrink the image.
-		if [ -n "$newsize" ]; then
-			pishrink.sh -d -e $newsize "$dir/$name.img"
+		if [ -n "$limit_size" ]; then
+			pishrink.sh -d $purge $noexpand -l $limit_size "$dir/$name.img"
 		else
-			pishrink.sh -d "$dir/$name.img"
+			pishrink.sh -d $purge $noexpand "$dir/$name.img"
 		fi
 		if [ $? -ne 0 ]; then
-			echo ERROR: Failed to shrink.
+			>&2 echo ERROR: Failed to shrink.
 			test -f "$dir/$name.img" && rm -f "$dir/$name.img"
 			exit 9
 		fi
 	fi
 
-	if [ -n "$zip" ]; then
+	if [ -n "$compress" ]; then
 		# Compress.
 		echo Compress the image.
 		img_size=$(stat --printf="%s" "$dir/$name.img") 
 		pv -tpreb -s $img_size "$dir/$name.img" | pigz -n9 > "$dir/$name.img.gz"
 		if [ $? -ne 0 ]; then
-			echo ERROR: Failed to compressed.
+			>&2 echo ERROR: Failed to compressed.
 			test -f "$dir/$name.img.gz" && rm -f "$dir/$name.img.gz"
 			exit 10
 		fi
-		if [ -z "$keep_unzip" ]; then
+		if [ -z "$keep_img" ]; then
 			echo Remove uncompressed image.
 			rm -f "$dir/$name.img"
 		fi
@@ -173,18 +166,18 @@ if [ $? -eq 0 ]; then
 
 	sync
 
-	if [ -z "$zip" ] || [ -n "$keep_unzip" ]; then
+	if [ -z "$compress" ] || [ -n "$keep_img" ]; then
 		test -n "$shrink" && echo Shrunk image: || echo Original image:
 		ls -lh "$dir/$name.img"
 	fi
 
-	if [ -n "$zip" ]; then
+	if [ -n "$compress" ]; then
 		echo Compressed image: && ls -lh "$dir/$name.img.gz"
 	fi
 
 	echo All done.
 else
-	echo ERROR: Failed to create backup image.
+	>&2 echo ERROR: Failed to create backup image.
 	rm -f "$dir/$name.img"
 	exit 8
 fi
