@@ -18,6 +18,65 @@ alias fatal='fatal_msg $LINENO'
 
 timestamp() { date +"%Y-%m-%d %H:%M:%S"; }
 
+printc() {
+	# Output a text with given color as the first argument if supported.
+	# If the first agument is not a valid foreground color, print everything.
+	# If color is not supported, print without color.
+	local valid=
+	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
+
+	if [ -n "$valid" ]; then 
+		text_color=$1
+		shift
+		if [ -n "$color" ]; then
+			echo "$($text_color "$*")"
+		else
+			echo "$*"
+		fi
+	else
+		# Invalid color? Print all.
+		echo "$*"
+	fi
+}
+
+printb() {
+	# Output a text with text and background color in the first 2 arguments.
+	# If the first agument is not a valid foreground color, print everything.
+	# If the second agument is not a valid background color, print with 
+	# foreground.
+	# If color is not supported, print without color.
+	local valid=
+	# Validate foreground.
+	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
+	if [ -n "$valid" ]; then 
+		text_color=$1
+		shift
+		# Validate background.
+		valid=
+		for c in $ANSI_BACKGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
+		if [ -n "$valid" ]; then
+			bg_color=$1
+			shift
+			# All well? Print with both foreground and background.
+			if [ -n "$color" ]; then
+				echo "$($text_color "$(${bg_color}_bg "$*")")"
+			else
+				echo "$*"
+			fi
+		else
+			# Invalid background? Print just foreground then.
+			if [ -n "$color" ]; then
+				echo "$($text_color "$*")"
+			else
+				echo "$*"
+			fi
+		fi
+	else
+		# Invalid color? Print all.
+		echo "$*"
+	fi
+}
+
 info_msg() {
 	# Print an info message. Caller line number is the first argument.
 	line=$1
@@ -117,7 +176,7 @@ while getopts ":hp:rv" opt; do
 	case ${opt} in
 	h) print_usage; exit ;;
 	p) part_no=$OPTARG ;;
-	r) readonly=true ;;
+	r) read_only='-r' ;;
 	v) echo $SCRIPT_NAME version $VERSION; exit ;;
 	\?) fatal 1 "Invalid option \"$OPTARG\"" ;;
 	:) fatal 2 "Option \"$OPTARG\" requires an argument." ;;
@@ -126,6 +185,10 @@ done
 
 # Remove processed arguments.
 shift $((OPTIND-1))
+
+fuck() {
+	echo "$1"
+}
 
 # This script must be run as root/sudo.
 if [ $(id -u) -ne 0 ]; then
@@ -162,18 +225,10 @@ for part in ${parts[@]}; do
 		sector_size=$(awk '{print $4}' <<<"$part")
 		echo "Sector size: $sector_size bytes"
 	elif [ $n -eq 1 ]; then
-		echo Partitions list:
-		if [ -z "$color" ]; then
-			echo "# $part"
-		else
-			echo $(blue "# $part")
-		fi
+		IFS=' ' printc hwhite "Partitions list:"
+		IFS=' ' printb black white "# $part           "
 	else
-		if [ -z "$color" ]; then
-			echo "$((n - 1)) $part"
-		else
-			echo $(hblue "$((n - 1)) $part")
-		fi
+		IFS=' ' printc "$((n - 1)) $part"
 	fi
 	let n+=1
 done
@@ -184,8 +239,10 @@ if [[ -n "$part_no" && $part_no -gt 0 && $part_no -lt $((${#parts[@]} - 1)) ]]; 
 else
 	# Ask for target partition.
 	while true; do
-		read -r -p "Which partition number to mount (Ctrl-C to cancel)? " part_no
-		if [[ $part_no -gt 0 && $part_no -lt $((${#parts[@]} - 1)) ]]; then
+		last=$((${#parts[@]} - 2))
+		prompt="$(printc yellow Which partition to mount \(1-$last, Ctrl-C to cancel\)?) "
+		read -r -p "$prompt" part_no
+		if [[ $part_no -ge 1 && $part_no -le $last ]]; then
 			part=${parts[$((part_no + 1))]}
 			break
 		else
@@ -194,25 +251,25 @@ else
 	done
 fi
 
-echo Will mount partiton $part_no from $img to $dir
+if [ -z "$read_only" ]; then
+	printc Will mount partiton $(printc yellow $part_no) from $(printc hblue $img) to $(printc hblue $dir)
+else
+	printc Will mount $(printc yellow read-only) partiton $(printc yellow $part_no) from $(printc hblue $img) to $(printc hblue $dir)
+fi
 
 # Find a free loop device.
 dev=$(losetup -f)
 first_sector=$(awk '{print $2}' <<<"$part")
 offset=$(($sector_size * $first_sector))
-echo Attaching partition $part_no from sector $first_sector, offset $offset to $dev
+# echo Attaching partition $part_no from sector $first_sector, offset $offset to $dev
 losetup -o $offset /dev/loop0 $img
 if [ $? -ne 0 ]; then
 	fatal 6 Failed to attach.
 fi
-mount /dev/loop0 $dir
+mount $read_only /dev/loop0 $dir
 if [ $? -ne 0 ]; then
 	fatal 7 Failed to mount.
 fi
-if [ -n "$color" ]; then
-	echo $(green Mounted to $dir. You can start using it now.)
-	echo $(yellow "NOTE: Run \"sudo umount $dev\" then \"sudo losetup -d $dev\"" to detach.)
-else
-	echo Mounted to $dir. You can start using it now.
-	echo "NOTE: Run \"sudo umount $dev\" then \"sudo losetup -d $dev\"" to detach.
-fi
+# printc green "Mounted to $(hblue $dir). You can start using it now."
+printc green "Mounted to $dir. You can start using it now."
+printc yellow "NOTE: Run \"sudo umount $dev\" then \"sudo losetup -d $dev\"" to detach.
