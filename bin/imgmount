@@ -22,6 +22,12 @@ printc() {
 	# Output a text with given color as the first argument if supported.
 	# If the first agument is not a valid foreground color, print everything.
 	# If color is not supported, print without color.
+	if [ -z "$ANSI_FOREGROUNDS" ]; then
+		shift
+		echo "$*"
+		return
+	fi
+
 	local valid=
 	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
 
@@ -45,6 +51,12 @@ printb() {
 	# If the second agument is not a valid background color, print with 
 	# foreground.
 	# If color is not supported, print without color.
+	if [ -z "$ANSI_FOREGROUNDS" ]; then
+		shift 2
+		echo "$*"
+		return
+	fi
+
 	local valid=
 	# Validate foreground.
 	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
@@ -226,9 +238,9 @@ for part in ${parts[@]}; do
 		echo "Sector size: $sector_size bytes"
 	elif [ $n -eq 1 ]; then
 		IFS=' ' printc hwhite "Partitions list:"
-		IFS=' ' printb black white "# $part           "
+		IFS=' ' printc uwhite "# $part           "
 	else
-		IFS=' ' printc "$((n - 1)) $part"
+		IFS=' ' echo "$((n - 1)) $part"
 	fi
 	let n+=1
 done
