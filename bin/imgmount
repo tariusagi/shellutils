@@ -273,12 +273,12 @@ fi
 dev=$(losetup -f)
 first_sector=$(awk '{print $2}' <<<"$part")
 offset=$(($sector_size * $first_sector))
-# echo Attaching partition $part_no from sector $first_sector, offset $offset to $dev
-losetup -o $offset /dev/loop0 $img
+echo Attaching partition $part_no from sector $first_sector, offset $offset to $dev
+losetup -o $offset $dev $img
 if [ $? -ne 0 ]; then
 	fatal 6 Failed to attach.
 fi
-mount $read_only /dev/loop0 $dir
+mount $read_only $dev $dir
 if [ $? -ne 0 ]; then
 	fatal 7 Failed to mount.
 fi
