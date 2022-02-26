@@ -226,20 +226,20 @@ test -n "$detach_all" && detach=yes
 
 if [ -n "$detach" ]; then
 	devs=$(ls /dev/loop*)
-	if [ -z "$dev" ]; then
-		printc No loop back devices found.
-		exit
-	fi
+	loopbacks=0
+	detached=0
 	for dev in $devs; do
 		# Find the image path.
 		info=($(losetup $dev 2>/dev/null))
 		if [ $? -ne 0 ]; then continue; fi
+		let loopbacks+=1
 		img=${info[2]}
 		# Find the mount point. It can be empty if the image was not mounted.
 		dir=$(grep $dev /proc/mounts | awk '{print $2}')
 		if [ -n "$detach_all" ]; then
 			# Detach all mode? Then just try detach and unmount this one.
 			detach "$img" $dev "$dir"
+			let detached+=1
 		else
 			if [ -z "$dir" ]; then
 				printc "Found $(printc hblue $dev) attached to $(printc hblue "$img")"
@@ -251,13 +251,17 @@ if [ -n "$detach" ]; then
 			while [ "$done" == "no" ]; do
 				read -r -p "$prompt" answer
 				case $answer in
-					[yY]) detach "$img" $dev "$dir"; done=true ;;
+					[yY]) detach "$img" $dev "$dir"; let detached+=1 done=true ;;
 					[nN]) done=true ;;
 				esac
 			done
 		fi
 	done
-	printc "All done!"
+	if [ $loopbacks -eq 0 ]; then
+		printc No loopbacks found.
+	else
+		printc $detached/$loopbacks loop back devices were detached.
+	fi
 	exit
 fi
 
