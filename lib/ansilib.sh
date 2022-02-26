@@ -62,5 +62,138 @@ ansi_colors_table(){
 			$f "$(${b}_bg "$f text on $b background")"
 		done
 	done
+	echo ""
 }
 
+printc() {
+	# Output a text with given color as the first argument if supported.
+	# If the first agument is not a valid foreground color, print everything.
+	# If color is not supported, print without color.
+	if [ -z "$ANSI_FOREGROUNDS" ]; then
+		shift
+		echo "$*"
+		return
+	fi
+
+	local valid=
+	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
+
+	if [ -n "$valid" ]; then 
+		text_color=$1
+		shift
+		if [ -n "$color" ]; then
+			echo "$($text_color "$*")"
+		else
+			echo "$*"
+		fi
+	else
+		# Invalid color? Print all.
+		echo "$*"
+	fi
+}
+
+printb() {
+	# Output a text with text and background color in the first 2 arguments.
+	# If the first agument is not a valid foreground color, print everything.
+	# If the second agument is not a valid background color, print with 
+	# foreground.
+	# If color is not supported, print without color.
+	if [ -z "$ANSI_FOREGROUNDS" ]; then
+		shift 2
+		echo "$*"
+		return
+	fi
+
+	local valid=
+	# Validate foreground.
+	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
+	if [ -n "$valid" ]; then 
+		text_color=$1
+		shift
+		# Validate background.
+		valid=
+		for c in $ANSI_BACKGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
+		if [ -n "$valid" ]; then
+			bg_color=$1
+			shift
+			# All well? Print with both foreground and background.
+			if [ -n "$color" ]; then
+				echo "$($text_color "$(${bg_color}_bg "$*")")"
+			else
+				echo "$*"
+			fi
+		else
+			# Invalid background? Print just foreground then.
+			if [ -n "$color" ]; then
+				echo "$($text_color "$*")"
+			else
+				echo "$*"
+			fi
+		fi
+	else
+		# Invalid color? Print all.
+		echo "$*"
+	fi
+}
+
+timestamp() { date +"%Y-%m-%d %H:%M:%S"; }
+
+info_msg() {
+	# Print an info message. Caller line number is the first argument.
+	line=$1
+	shift
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) INFO  ($SCRIPT_NAME:$line): $*"
+	else
+		>&2 echo "$(timestamp) INFO  ($(green $SCRIPT_NAME:$line)): $*"
+	fi
+}
+
+warn_msg() {
+	# Print an warning message. Caller line number is the first argument.
+	line=$1
+	shift
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) WARN  ($SCRIPT_NAME:$line): $*"
+	else
+		>&2 echo "$(timestamp) $(yellow WARN)  ($(green $SCRIPT_NAME:$line)): $*"
+	fi
+}
+
+error_msg() {
+	# Print an error message. Caller line number is the first argument.
+	line=$1
+	shift
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) ERROR ($SCRIPT_NAME:$line): $*"
+	else
+		>&2 echo "$(timestamp) $(red ERROR) ($(green $SCRIPT_NAME:$line)): $*"
+	fi
+}
+
+fatal_msg() {
+	# Print an fatal message then quit. Caller line number is the first argument,
+	# and the second is the exit code.
+	line=$1
+	code=$2
+	shift 2
+	if [ -z "$color" ]; then
+		>&2 echo "$(timestamp) FATAL ($SCRIPT_NAME:$line, code $code): $*"
+	else
+		>&2 echo "$(timestamp) $(purple FATAL) ($(green $SCRIPT_NAME:$line, $(purple code $code))): $*"
+	fi
+	exit $code
+}
+
+# Aliases to include caller line number in message functions.
+shopt -s expand_aliases
+alias info='info_msg $LINENO'
+alias warn='warn_msg $LINENO'
+alias error='error_msg $LINENO'
+alias fatal='fatal_msg $LINENO'
+
+# Output full combinations of text and background colors if run directly.
+if [ "$0" == "$BASH_SOURCE" ]; then
+	echo The ANSI color table:
+	ansi_colors_table
+fi

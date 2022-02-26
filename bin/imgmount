@@ -9,133 +9,6 @@ SCRIPT_DIR="$(dirname $SCRIPT_FULLPATH)"
 SCRIPT_NAME="$(basename $SCRIPT_FULLPATH)"
 # Path to ansilib.sh, which supports color text output.
 ANSILIB_PATH=/usr/local/lib/ansilib.sh
-# Aliases to include caller line number in message functions.
-shopt -s expand_aliases
-alias info='info_msg $LINENO'
-alias warn='warn_msg $LINENO'
-alias error='error_msg $LINENO'
-alias fatal='fatal_msg $LINENO'
-
-timestamp() { date +"%Y-%m-%d %H:%M:%S"; }
-
-printc() {
-	# Output a text with given color as the first argument if supported.
-	# If the first agument is not a valid foreground color, print everything.
-	# If color is not supported, print without color.
-	if [ -z "$ANSI_FOREGROUNDS" ]; then
-		shift
-		echo "$*"
-		return
-	fi
-
-	local valid=
-	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
-
-	if [ -n "$valid" ]; then 
-		text_color=$1
-		shift
-		if [ -n "$color" ]; then
-			echo "$($text_color "$*")"
-		else
-			echo "$*"
-		fi
-	else
-		# Invalid color? Print all.
-		echo "$*"
-	fi
-}
-
-printb() {
-	# Output a text with text and background color in the first 2 arguments.
-	# If the first agument is not a valid foreground color, print everything.
-	# If the second agument is not a valid background color, print with 
-	# foreground.
-	# If color is not supported, print without color.
-	if [ -z "$ANSI_FOREGROUNDS" ]; then
-		shift 2
-		echo "$*"
-		return
-	fi
-
-	local valid=
-	# Validate foreground.
-	for c in $ANSI_FOREGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
-	if [ -n "$valid" ]; then 
-		text_color=$1
-		shift
-		# Validate background.
-		valid=
-		for c in $ANSI_BACKGROUNDS; do if [ "$c" == "$1" ]; then valid=true; fi; done
-		if [ -n "$valid" ]; then
-			bg_color=$1
-			shift
-			# All well? Print with both foreground and background.
-			if [ -n "$color" ]; then
-				echo "$($text_color "$(${bg_color}_bg "$*")")"
-			else
-				echo "$*"
-			fi
-		else
-			# Invalid background? Print just foreground then.
-			if [ -n "$color" ]; then
-				echo "$($text_color "$*")"
-			else
-				echo "$*"
-			fi
-		fi
-	else
-		# Invalid color? Print all.
-		echo "$*"
-	fi
-}
-
-info_msg() {
-	# Print an info message. Caller line number is the first argument.
-	line=$1
-	shift
-	if [ -z "$color" ]; then
-		>&2 echo "$(timestamp) INFO  ($SCRIPT_NAME:$line): $*"
-	else
-		>&2 echo "$(timestamp) INFO  ($(green $SCRIPT_NAME:$line)): $*"
-	fi
-}
-
-warn_msg() {
-	# Print an warning message. Caller line number is the first argument.
-	line=$1
-	shift
-	if [ -z "$color" ]; then
-		>&2 echo "$(timestamp) WARN  ($SCRIPT_NAME:$line): $*"
-	else
-		>&2 echo "$(timestamp) $(yellow WARN)  ($(green $SCRIPT_NAME:$line)): $*"
-	fi
-}
-
-error_msg() {
-	# Print an error message. Caller line number is the first argument.
-	line=$1
-	shift
-	if [ -z "$color" ]; then
-		>&2 echo "$(timestamp) ERROR ($SCRIPT_NAME:$line): $*"
-	else
-		>&2 echo "$(timestamp) $(red ERROR) ($(green $SCRIPT_NAME:$line)): $*"
-	fi
-}
-
-fatal_msg() {
-	# Print an fatal message then quit. Caller line number is the first argument,
-	# and the second is the exit code.
-	line=$1
-	code=$2
-	shift 2
-	if [ -z "$color" ]; then
-		>&2 echo "$(timestamp) FATAL ($SCRIPT_NAME:$line, code $code): $*"
-	else
-		>&2 echo "$(timestamp) $(purple FATAL) ($(green $SCRIPT_NAME:$line, $(purple code $code))): $*"
-	fi
-	exit $code
-}
-
 detach() {
 	# Detach given loop back image ($1) from device ($2). If $3 was given, unmount
 	#	from it first.
@@ -176,8 +49,8 @@ print_usage () {
 	else
 		cat <<-COLORUSAGE
 			$(ugreen $SCRIPT_NAME) version $(red $(yellow_bg $VERSION)).
-			Say hello to given name and print out all given command line arguments.
-			Syntax: $(green $SCRIPT_NAME) $(yellow [options])
+			Mount/unmount disk/partition image.
+			Syntax: $(green $SCRIPT_NAME) $(yellow [options]) [<image dir>]
 			$(yellow Options:)
 			image           Path to the image.
 			dir             Mount point (a directory).
