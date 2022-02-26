@@ -136,6 +136,18 @@ fatal_msg() {
 	exit $code
 }
 
+detach() {
+	# Detach given loop back image ($1) from device ($2). If $3 was given, unmount
+	#	from it first.
+	if [ -n "$3" ]; then
+		umount "$3" || fatal "Failed to umount $3"
+		rm -fr "$3"
+		printc green "Unmount and remove $(printc hblue "$3") from $(printc hblue "$2")"
+	fi
+	sudo losetup -d $2 || fatal "Failed to detach $2"
+	printc green "Detach $(printc hblue "$2") from $(printc hblue "$1")"
+}
+
 # Include ansilib and enable color support if possible.
 if [ -f $ANSILIB_PATH ]; then
 	color=yes
@@ -150,10 +162,12 @@ print_usage () {
 		cat <<-USAGE
 			$SCRIPT_NAME version $VERSION.
 			Mount/unmount disk/partition image.
-			Syntax: $SCRIPT_NAME [options] image dir
+			Syntax: $SCRIPT_NAME [options] [<image dir>]
 			Options:
-			image           Path to the image.
-			dir             Mount point (a directory).
+			image           Path to the image. Must set dir to mount with it.
+			dir             Mount point (a directory). Must set along with image.
+			-d              Interactively detach and unmount existing loop back.
+			-D              Detach and unmount all existing loop back devices.
 			-h              Print this usage.
 			-p n            Mount the "n"th partition in the image. Default is 1.
 			-r              Mount in read-only mode.
@@ -167,6 +181,8 @@ print_usage () {
 			$(yellow Options:)
 			image           Path to the image.
 			dir             Mount point (a directory).
+			-d              Interactively detach and unmount existing loop back.
+			-D              Detach and unmount all existing loop back devices.
 			-h              Print this usage.
 			-p n            Mount the "n"th partition in the image. Default is 1.
 			-r              Mount in read-only mode.
@@ -184,8 +200,10 @@ fi
 
 # Now handle command line option based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts ":hp:rv" opt; do
+while getopts ":dDhp:rv" opt; do
 	case ${opt} in
+	d) detach=yes ;;
+	D) detach_all=yes ;;
 	h) print_usage; exit ;;
 	p) part_no=$OPTARG ;;
 	r) read_only='-r' ;;
@@ -198,13 +216,49 @@ done
 # Remove processed arguments.
 shift $((OPTIND-1))
 
-fuck() {
-	echo "$1"
-}
-
 # This script must be run as root/sudo.
 if [ $(id -u) -ne 0 ]; then
 	fatal 3 Require root/sudo privilege.
+fi
+
+# Force detach option if detach_all was set.
+test -n "$detach_all" && detach=yes
+
+if [ -n "$detach" ]; then
+	devs=$(ls /dev/loop*)
+	if [ -z "$dev" ]; then
+		printc No loop back devices found.
+		exit
+	fi
+	for dev in $devs; do
+		# Find the image path.
+		info=($(losetup $dev 2>/dev/null))
+		if [ $? -ne 0 ]; then continue; fi
+		img=${info[2]}
+		# Find the mount point. It can be empty if the image was not mounted.
+		dir=$(grep $dev /proc/mounts | awk '{print $2}')
+		if [ -n "$detach_all" ]; then
+			# Detach all mode? Then just try detach and unmount this one.
+			detach "$img" $dev "$dir"
+		else
+			if [ -z "$dir" ]; then
+				printc "Found $(printc hblue $dev) attached to $(printc hblue "$img")"
+			else
+				printc "Found $(printc hblue $dev) mounted to $(printc hblue "$dir"), attached to $(printc hblue "$img")"
+			fi
+			prompt="$(printc yellow 'Do you want to detach it [yN]? ')"
+			done=no
+			while [ "$done" == "no" ]; do
+				read -r -p "$prompt" answer
+				case $answer in
+					[yY]) detach "$img" $dev "$dir"; done=true ;;
+					[nN]) done=true ;;
+				esac
+			done
+		fi
+	done
+	printc "All done!"
+	exit
 fi
 
 # Check image file.
