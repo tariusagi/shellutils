@@ -222,7 +222,13 @@ if [ $(id -u) -ne 0 ]; then
 fi
 
 # Force detach option if detach_all was set.
-test -n "$detach_all" && detach=yes
+if [ -n "$detach_all" ]; then
+	read -r -p "$(printc purple "Do you REALLY want to detach ALL [yN]? ")" answer
+	case $answer in
+		[yY]) detach=yes ;;
+		*) exit ;;
+	esac
+fi
 
 if [ -n "$detach" ]; then
 	devs=$(ls /dev/loop*)
