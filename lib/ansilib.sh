@@ -1,6 +1,6 @@
 # ANSI library for shell scripting.
 # ---------------------------------
-# This is a collection of functions that support outputing ANSI color texts.
+# This is a collection of functions that support outputing ANSI ANSI_COLORS texts.
 # Include this file in your script to use. Ex:
 #   source ./ansilib.sh 
 # And then call these functions with the text to be colored. Variable substituation supported. For example:
@@ -15,6 +15,10 @@
 # NOTE: to preserve whitespaces, double-quote all texts and nested outputs, example:
 #   echo "This  line  has $(red "$(yellow_bg "red   text   on   yellow   background")") inside it"
 
+# Unset this to disable color in various functions.
+ANSI_COLORS=yes 
+
+# Colors names.
 ANSI_FOREGROUNDS='black red green yellow blue purple cyan white hblack hred hgreen hyellow hblue hpurple hcyan hwhite ublack ured ugreen uyellow ublue upurple ucyan uwhite'
 ANSI_BACKGROUNDS='black red green yellow blue purple cyan white'
 
@@ -66,9 +70,9 @@ ansi_colors_table(){
 }
 
 printc() {
-	# Output a text with given color as the first argument if supported.
-	# If the first agument is not a valid foreground color, print everything.
-	# If color is not supported, print without color.
+	# Output a text with given ANSI_COLORS as the first argument if supported.
+	# If the first agument is not a valid foreground ANSI_COLORS, print everything.
+	# If ANSI_COLORS is not supported, print without ANSI_COLORS.
 	if [ -z "$ANSI_FOREGROUNDS" ]; then
 		shift
 		echo "$*"
@@ -81,23 +85,23 @@ printc() {
 	if [ -n "$valid" ]; then 
 		text_color=$1
 		shift
-		if [ -n "$color" ]; then
+		if [ -n "$ANSI_COLORS" ]; then
 			echo "$($text_color "$*")"
 		else
 			echo "$*"
 		fi
 	else
-		# Invalid color? Print all.
+		# Invalid ANSI_COLORS? Print all.
 		echo "$*"
 	fi
 }
 
 printb() {
-	# Output a text with text and background color in the first 2 arguments.
-	# If the first agument is not a valid foreground color, print everything.
-	# If the second agument is not a valid background color, print with 
+	# Output a text with text and background ANSI_COLORS in the first 2 arguments.
+	# If the first agument is not a valid foreground ANSI_COLORS, print everything.
+	# If the second agument is not a valid background ANSI_COLORS, print with 
 	# foreground.
-	# If color is not supported, print without color.
+	# If ANSI_COLORS is not supported, print without ANSI_COLORS.
 	if [ -z "$ANSI_FOREGROUNDS" ]; then
 		shift 2
 		echo "$*"
@@ -117,21 +121,21 @@ printb() {
 			bg_color=$1
 			shift
 			# All well? Print with both foreground and background.
-			if [ -n "$color" ]; then
+			if [ -n "$ANSI_COLORS" ]; then
 				echo "$($text_color "$(${bg_color}_bg "$*")")"
 			else
 				echo "$*"
 			fi
 		else
 			# Invalid background? Print just foreground then.
-			if [ -n "$color" ]; then
+			if [ -n "$ANSI_COLORS" ]; then
 				echo "$($text_color "$*")"
 			else
 				echo "$*"
 			fi
 		fi
 	else
-		# Invalid color? Print all.
+		# Invalid ANSI_COLORS? Print all.
 		echo "$*"
 	fi
 }
@@ -142,7 +146,7 @@ info_msg() {
 	# Print an info message. Caller line number is the first argument.
 	line=$1
 	shift
-	if [ -z "$color" ]; then
+	if [ -z "$ANSI_COLORS" ]; then
 		>&2 echo "$(timestamp) INFO  ($SCRIPT_NAME:$line): $*"
 	else
 		>&2 echo "$(timestamp) INFO  ($(green $SCRIPT_NAME:$line)): $*"
@@ -153,7 +157,7 @@ warn_msg() {
 	# Print an warning message. Caller line number is the first argument.
 	line=$1
 	shift
-	if [ -z "$color" ]; then
+	if [ -z "$ANSI_COLORS" ]; then
 		>&2 echo "$(timestamp) WARN  ($SCRIPT_NAME:$line): $*"
 	else
 		>&2 echo "$(timestamp) $(yellow WARN)  ($(green $SCRIPT_NAME:$line)): $*"
@@ -164,7 +168,7 @@ error_msg() {
 	# Print an error message. Caller line number is the first argument.
 	line=$1
 	shift
-	if [ -z "$color" ]; then
+	if [ -z "$ANSI_COLORS" ]; then
 		>&2 echo "$(timestamp) ERROR ($SCRIPT_NAME:$line): $*"
 	else
 		>&2 echo "$(timestamp) $(red ERROR) ($(green $SCRIPT_NAME:$line)): $*"
@@ -177,7 +181,7 @@ fatal_msg() {
 	line=$1
 	code=$2
 	shift 2
-	if [ -z "$color" ]; then
+	if [ -z "$ANSI_COLORS" ]; then
 		>&2 echo "$(timestamp) FATAL ($SCRIPT_NAME:$line, code $code): $*"
 	else
 		>&2 echo "$(timestamp) $(purple FATAL) ($(green $SCRIPT_NAME:$line, $(purple code $code))): $*"
@@ -194,6 +198,6 @@ alias fatal='fatal_msg $LINENO'
 
 # Output full combinations of text and background colors if run directly.
 if [ "$0" == "$BASH_SOURCE" ]; then
-	echo The ANSI color table:
+	echo The ANSI ANSI_COLORS table:
 	ansi_colors_table
 fi

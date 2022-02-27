@@ -7,8 +7,20 @@ SCRIPT_FULLPATH="$(readlink -f $0)"
 SCRIPT_DIR="$(dirname $SCRIPT_FULLPATH)"
 # This script's base name (file name only, without directory).
 SCRIPT_NAME="$(basename $SCRIPT_FULLPATH)"
-# Path to ansilib.sh, which supports color text output.
+
+# Include ansilib to get colors support.
 ANSILIB_PATH=/usr/local/lib/ansilib.sh
+if [ -f $ANSILIB_PATH ]; then
+	. $ANSILIB_PATH
+	if [ $? -ne 0 ]; then
+		>&2 echo FATAL: Could not source $ANSILIB_PATH
+		exit 1
+	fi
+else
+		>&2 echo FATAL: $ANSILIB_PATH does not exist.
+		exit 1
+fi
+
 detach() {
 	# Detach given loop back image ($1) from device ($2). If $3 was given, unmount
 	#	from it first.
@@ -21,17 +33,11 @@ detach() {
 	printc green "Detach $(printc hblue "$2") from $(printc hblue "$1")"
 }
 
-# Include ansilib and enable color support if possible.
-if [ -f $ANSILIB_PATH ]; then
-	color=yes
-	. $ANSILIB_PATH
-fi
-
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
 print_usage () {
 	# Usage statements, use heredoc. Put all statements between "USAGE" lines.
-	if [ -z "$color" ]; then
+	if [ -z "$ANSI_COLORS" ]; then
 		cat <<-USAGE
 			$SCRIPT_NAME version $VERSION.
 			Mount/unmount disk/partition image.
