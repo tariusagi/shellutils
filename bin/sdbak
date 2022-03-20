@@ -19,9 +19,11 @@ if [ $(id -u) -ne 0 ]; then
 	exit 1
 fi
 
-# Default settings.
-dev="/dev/mmcblk0"
+# Default settings: purge, shrink and compress, using hostname as the prefix.
 name=$(hostname)
+compress=yes
+shrink=yes
+purge='-p'
 
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
@@ -38,7 +40,7 @@ print_usage () {
 	-k         Keep original image after shrinking or compressing.
 	-l n       Limit size to expand the rootfs during first boot. See "size" argument of the size2fs command. Ex: "-l 4.5G".
 	-n         Don't expand filesystem when image is booted the first time
-	-p         Purge redudant files (logs, apt archives, temp...).
+	-p         Purge redudant files (logs, apt archives, temp...) and then shrink.
 	-s         Shrink backup image.
 	-v         Print this program version.
 	NOTE: 
