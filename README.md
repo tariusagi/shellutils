@@ -49,28 +49,45 @@ Show a Git's repository revisions log as a graph in CLI.
 
 ## imgmount
 
-```sh
-Send an alarm signal to lcdserver and/or alarmserver. The IPs and ports of the
-servers must be set in the envar LCD_SERVER and BUZZER_SERVER before calling
-this program, for example: "export LCD_SERVER="192.168.1.2 1234".
-
-Syntax: sendalarm [signal] [message]
-
-where:
-- signal: one of "on", "off", "info", "ok", "warn", "error", which turns on or
-off the buzzer, or make different sounds.
-- message: will be displayed on the LCD. It must start with a LCD line number.
-
-Example:
-        sendalarm info line1 Backup started
-        sendalarm warn line2 DB err, fixing
-        sendalarm error line2 DB fix failed
-        sendalarm ok line1 Backup done
+```txt
+Mount/unmount disk/partition image.
+Syntax: imgmount [options] [<image dir>]
+Options:
+image           Path to the image.
+dir             Mount point (a directory).
+-d              Interactively detach and unmount existing loop back.
+-D              Detach and unmount all existing loop back devices.
+-h              Print this usage.
+-p n            Mount the "n"th partition in the image. Default is 1.
+-r              Mount in read-only mode.
+-v              Print this program version.
 ```
 
 ## sdbak
 
-```sh
+```txt
+Syntax: sdbak [options] DEV DIR
+Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup can be shrinked using pishrink.sh and compressed with pigz.
+Options:
+-c         Compress backup image.
+-d         Use default setting: purge, shrink, compress, use current hostname, and ignore all other options.
+-h         Print this usage.
+-f <name>  Name of the backup image. Default is the current hostname.
+-k         Keep original image after shrinking or compressing.
+-l n       Limit size to expand the rootfs during first boot. See "size" argument of the size2fs command. Ex: "-l 4.5G".
+-n         Don't expand filesystem when image is booted the first time
+-p         Purge redudant files (logs, apt archives, temp...) and then shrink.
+-s         Shrink backup image.
+-v         Print this program version.
+NOTE:
+- This script requires root/sudo privilege.
+- This script requires pishrink.sh from https://github.com/tariusagi/PiShrink.git. Download and put it in root's PATH (such as /usr/local/bin/) before running this script.
+- Timestamp will be appended to backup file name automatically.
+```
+
+## sendalarm
+
+```txt
 Send an alarm signal to lcdserver and/or alarmserver. The IPs and ports of the
 servers must be set in the envar LCD_SERVER and BUZZER_SERVER before calling
 this program, for example: "export LCD_SERVER="192.168.1.2 1234".
@@ -83,31 +100,10 @@ off the buzzer, or make different sounds.
 - message: will be displayed on the LCD. It must start with a LCD line number.
 
 Example:
-        sendalarm info line1 Backup started
-        sendalarm warn line2 DB err, fixing
-        sendalarm error line2 DB fix failed
-        sendalarm ok line1 Backup done
-```
-
-## sendalarm
-
-```sh
-end an alarm signal to lcdserver and/or alarmserver. The IPs and ports of the
-servers must be set in the envar LCD_SERVER and BUZZER_SERVER before calling
-this program, for example: "export LCD_SERVER="192.168.1.2 1234".
-
-Syntax: sendalarm [signal] [message]
-
-where:
-- signal: one of "on", "off", "info", "ok", "warn", "error", which turns on or
-off the buzzer, or make different sounds.
-- message: will be displayed on the LCD. It must start with a LCD line number.
-
-Example:
-        sendalarm info line1 Backup started
-        sendalarm warn line2 DB err, fixing
-        sendalarm error line2 DB fix failed
-        sendalarm ok line1 Backup done
+sendalarm info line1 Backup started
+sendalarm warn line2 DB err, fixing
+sendalarm error line2 DB fix failed
+sendalarm ok line1 Backup done
 ```
 
 ## svclist
@@ -116,23 +112,22 @@ List system services using `systemctl` or `service` command (require root/sudo).
 
 ## sysinfo
 
-```sh
-Send an alarm signal to lcdserver and/or alarmserver. The IPs and ports of the
-servers must be set in the envar LCD_SERVER and BUZZER_SERVER before calling
-this program, for example: "export LCD_SERVER="192.168.1.2 1234".
-
-Syntax: sendalarm [signal] [message]
-
-where:
-- signal: one of "on", "off", "info", "ok", "warn", "error", which turns on or
-off the buzzer, or make different sounds.
-- message: will be displayed on the LCD. It must start with a LCD line number.
-
-Example:
-        sendalarm info line1 Backup started
-        sendalarm warn line2 DB err, fixing
-        sendalarm error line2 DB fix failed
-        sendalarm ok line1 Backup done
+```txt
+Syntax: sysinfo [OPTIONS]
+Print system info one by one and optionally show on a LCD.
+Options:
+-h            Print this usage.
+-i sec        Seconds between metrics. Default none or 1 if show on a LCD.
+-m dir        Add mount point dir to list of disk usage report.
+-n name       Name of the system. Default is the hostname.
+-N            Disable showing system name.
+-r            Repeat.
+-s host       Address of a LCD server.
+-p port       Port of a LCD server. Default is 1234.
+-t list       List of target info to show, separated by commas. Supported
+targets are up (means uptime), load, temp, mem, ip, disk. If
+              this option is omitted, all targets will be shown.
+-l num        Line to be printed on the LCD.
 ```
 
 ## usbmount & usbumount

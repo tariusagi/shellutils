@@ -19,12 +19,6 @@ if [ $(id -u) -ne 0 ]; then
 	exit 1
 fi
 
-# Default settings: purge, shrink and compress, using hostname as the prefix.
-name=$(hostname)
-compress=yes
-shrink=yes
-purge='-p'
-
 # A fuction to print usage statements. Usage statements might be printed more
 # than once, so it's better to make it a function.
 print_usage () {
@@ -35,6 +29,7 @@ print_usage () {
 	Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup can be shrinked using pishrink.sh and compressed with pigz.
 	Options:
 	-c         Compress backup image.
+	-d         Use default setting: purge, shrink, compress, use current hostname, and ignore all other options.
 	-h         Print this usage.
 	-f <name>  Name of the backup image. Default is the current hostname.
 	-k         Keep original image after shrinking or compressing.
@@ -59,20 +54,21 @@ fi
 
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "cf:hkl:npsv" opt; do
-    case ${opt} in
-    c) compress=yes ;;
-    f) name=$OPTARG ;;
-    h) print_usage; exit ;;
-    k) keep_img=yes ;;
-    l) limit_size=$OPTARG ;;
-    n) noexpand='-n' ;;
+while getopts "cdf:hkl:npsv" opt; do
+	case ${opt} in
+		h) print_usage; exit ;;
+		d) compress=yes; purge='-p'; shrink=yes; break ;;
+		c) compress=yes ;;
+		f) name=$OPTARG ;;
+		k) keep_img=yes ;;
+		l) limit_size=$OPTARG ;;
+		n) noexpand='-n' ;;
 		p) shrink=yes; purge='-p' ;;
-    s) shrink=yes ;;
-    v) echo $SCRIPT_NAME version $VERSION; exit ;;
-    \?)>&2 echo "ERROR: Invalid option \"$OPTARG\""; exit 2 ;;
-    :) >&2 echo "ERROR: Option \"$OPTARG\" requires an argument."; exit 3 ;;
-    esac
+		s) shrink=yes ;;
+		v) echo $SCRIPT_NAME version $VERSION; exit ;;
+		\?)>&2 echo "ERROR: Invalid option \"$OPTARG\""; exit 2 ;;
+		:) >&2 echo "ERROR: Option \"$OPTARG\" requires an argument."; exit 3 ;;
+	esac
 done
 
 # Remove processed arguments.
@@ -94,7 +90,9 @@ else
 	dir=${2%/}
 fi
 
-# Append current timestamp and the .img extension to the file name.
+# Append current timestamp and the .img extension to the file name. If file name
+# was not set, use the current hostname.
+test -z "$name" && name=$(hostname)
 name="$name-$(date +%Y%m%d_%H%M%S)"
 
 echo Block device: $dev
