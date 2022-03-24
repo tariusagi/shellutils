@@ -71,6 +71,7 @@ Create a backup of DEV (such as /dev/mmcblk0) and put it into DIR. The backup ca
 Options:
 -c         Compress backup image.
 -d         Use default setting: purge, shrink, compress, use current hostname, and ignore all other options.
+-e n       Add an extra n (default 100) megabytes to the shrunk image.
 -h         Print this usage.
 -f <name>  Name of the backup image. Default is the current hostname.
 -k         Keep original image after shrinking or compressing.

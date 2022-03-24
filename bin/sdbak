@@ -30,6 +30,7 @@ print_usage () {
 	Options:
 	-c         Compress backup image.
 	-d         Use default setting: purge, shrink, compress, use current hostname, and ignore all other options.
+	-e n       Add an extra n (default 100) megabytes to the shrunk image.
 	-h         Print this usage.
 	-f <name>  Name of the backup image. Default is the current hostname.
 	-k         Keep original image after shrinking or compressing.
@@ -52,13 +53,17 @@ if [ $# -eq 0 ]; then
     exit
 fi
 
+# Default options.
+extra_space=100
+
 # Now handle command line arguments based on predefined list. Refer to "getopts"
 # document to understand this code.
-while getopts "cdf:hkl:npsv" opt; do
+while getopts "cde:f:hkl:npsv" opt; do
 	case ${opt} in
 		h) print_usage; exit ;;
 		d) compress=yes; purge='-p'; shrink=yes; break ;;
 		c) compress=yes ;;
+		e) extra_space=$OPTARG ;;
 		f) name=$OPTARG ;;
 		k) keep_img=yes ;;
 		l) limit_size=$OPTARG ;;
@@ -70,6 +75,9 @@ while getopts "cdf:hkl:npsv" opt; do
 		:) >&2 echo "ERROR: Option \"$OPTARG\" requires an argument."; exit 3 ;;
 	esac
 done
+
+# Discard "-e" if not shrinking.
+test -z "$shrink" && unset extra_space
 
 # Remove processed arguments.
 shift $((OPTIND-1))
@@ -101,6 +109,7 @@ echo Target directory: $dir
 
 test -n "$shrink" && echo Will shrink image.
 test -n "$purge" && echo Will purge redundant data before shrinking.
+test -n "$extra_space" && echo Will add $extra_space MB to shrunk image.
 test -n "$compress" && echo Will compress image.
 test -n "$keep_img" && echo Will keep uncompressed image.
 test -n "$limit_size" && echo Will limit rootfs size to $limit_size.
@@ -127,7 +136,7 @@ sd_size=$((size * $sector_size))
 echo "Total sectors:  $(pretty_num $size)"
 echo "Total size:    " $(pretty_num $sd_size) "bytes"
 echo Backing up $dev \($(pretty_num $(($sd_size/1024**2))) MB\) to \"$dir/$name.img\"...
-pv -tpreb $dev -S -s $sd_size | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
+pv -tpreb -B 1M -S -s $sd_size $dev | dd of="$dir/$name.img" bs=1M conv=sync,noerror iflag=fullblock
 
 if [ $? -eq 0 ]; then
 	echo Backup image was created.
@@ -136,9 +145,9 @@ if [ $? -eq 0 ]; then
 		# Shrink.
 		echo Shrink the image.
 		if [ -n "$limit_size" ]; then
-			pishrink.sh -d $purge $noexpand -l $limit_size "$dir/$name.img"
+			pishrink.sh -d $purge -e $extra_space $noexpand -l $limit_size "$dir/$name.img"
 		else
-			pishrink.sh -d $purge $noexpand "$dir/$name.img"
+			pishrink.sh -d $purge -e $extra_space $noexpand "$dir/$name.img"
 		fi
 		if [ $? -ne 0 ]; then
 			>&2 echo ERROR: Failed to shrink.
