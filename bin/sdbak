@@ -113,6 +113,7 @@ test -n "$extra_space" && echo Will add $extra_space MB to shrunk image.
 test -n "$compress" && echo Will compress image.
 test -n "$keep_img" && echo Will keep uncompressed image.
 test -n "$limit_size" && echo Will limit rootfs size to $limit_size.
+test -n "$noexpand" && echo Will not expand rootfs on first boot.
 
 # List of dependencies.
 DEP="parted pv pigz losetup tune2fs md5sum e2fsck resize2fs pishrink.sh"
